@@ -26,10 +26,8 @@ def test_new_project_and_all_generators(tmp_path: Path):
     assert (root / "app/views/posts/index.bjson").is_file()
     assert (root / "app/views/posts/show.bjson").is_file()
     assert list((root / "db/migrations").glob("*_create_posts.py"))
-    assert (
-        'routes.resources("/posts", PostsController)'
-        in (root / "config/routes.py").read_text()
-    )
+    assert 'routes.resources("/posts")' in (root / "config/routes.py").read_text()
+    assert "app.controllers" not in (root / "config/routes.py").read_text()
     assert ConventionInspector(root).inspect() == []
 
     generator.generate_model("Comment", ["body:text"])

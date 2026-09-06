@@ -226,19 +226,12 @@ class ResourceGenerator:
     def update_routes(self, names: ResourceNames) -> Path:
         path = self.root / "config" / "routes.py"
         content = path.read_text(encoding="utf-8")
-        import_line = f"from app.controllers.{names.plural}_controller import {names.controller}\n"
-        route_line = f'routes.resources("/{names.plural}", {names.controller})\n'
-        if import_line in content or route_line in content:
+        route_line = f'routes.resources("/{names.plural}")\n'
+        if route_line in content:
             raise BingoConventionError(
                 f"Routes for {names.model} already exist in config/routes.py."
             )
-        lines = content.splitlines()
-        insert_at = next(
-            (index for index, line in enumerate(lines) if line.startswith("routes =")),
-            len(lines),
-        )
-        lines.insert(insert_at, import_line.rstrip())
-        updated = "\n".join(lines).rstrip() + "\n\n" + route_line
+        updated = content.rstrip() + "\n\n" + route_line
         path.write_text(updated, encoding="utf-8")
         return path
 

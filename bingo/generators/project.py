@@ -184,6 +184,19 @@ for the current interface.
 
 All routes live in `config/routes.py`. Views live under `app/views/`.
 
+Declare resources as `routes.resources("/posts")`; Bingo infers
+`app/controllers/posts_controller.py` and `PostsController`. Custom routes use an
+explicit HTTP verb and a string target such as
+`routes.get("/posts/published", "PostsController.published")`. Do not import
+controllers into the route file.
+
+Use `with routes.group("/admin"):` when the URL and controller directory share a
+group. The leading slash is required. Inside the block, `/posts` resolves to
+`app/controllers/admin/posts_controller.py`, and resource views live in
+`app/views/admin/posts/`. Nested group blocks map to nested URL, controller,
+and view directories. Keep the class name `PostsController`; the directory owns
+the group.
+
 HTML URLs have no format suffix and use Jinja `.html` views. JSON URLs end in
 `.json` and use restricted-expression `.bjson` views. An extensionless
 `self.render("posts/show")` follows the request format. Views only represent

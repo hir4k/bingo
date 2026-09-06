@@ -60,7 +60,7 @@ class ConventionInspector:
 
         violations = []
         resource_controllers = self._resource_controllers()
-        for path in directory.glob("*.py"):
+        for path in directory.rglob("*.py"):
             if path.name == "__init__.py":
                 continue
             if not path.name.endswith("_controller.py"):
@@ -76,6 +76,7 @@ class ConventionInspector:
             violations.extend(
                 self._inspect_controller(
                     path,
+                    groups=path.parent.relative_to(directory).parts,
                     resource_controllers=resource_controllers,
                 )
             )
@@ -85,7 +86,8 @@ class ConventionInspector:
         self,
         path: Path,
         *,
-        resource_controllers: set[str],
+        groups: tuple[str, ...],
+        resource_controllers: set[tuple[tuple[str, ...], str]],
     ) -> list[ConventionViolation]:
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -118,7 +120,7 @@ class ConventionInspector:
 
         controller_class = classes[0]
         violations = self._controller_class_violations(path, controller_class)
-        is_resource = controller_class.name in resource_controllers
+        is_resource = (groups, controller_class.name) in resource_controllers
         singular = not expected_resource.endswith("s")
         if is_resource and singular:
             plural = pluralize(expected_resource)
@@ -132,7 +134,12 @@ class ConventionInspector:
             )
         if is_resource:
             violations.extend(
-                self._resource_violations(path, expected_resource, controller_class)
+                self._resource_violations(
+                    path,
+                    groups,
+                    expected_resource,
+                    controller_class,
+                )
             )
         return violations
 
@@ -225,6 +232,7 @@ class ConventionInspector:
     def _resource_violations(
         self,
         path: Path,
+        groups: tuple[str, ...],
         resource: str,
         controller: ast.ClassDef,
     ) -> list[ConventionViolation]:
@@ -246,7 +254,7 @@ class ConventionInspector:
                 )
             )
 
-        view_root = self.root / "app" / "views" / resource
+        view_root = self.root.joinpath("app", "views", *groups, resource)
         expected_views = (
             "index.html",
             "index.bjson",
@@ -269,7 +277,7 @@ class ConventionInspector:
             )
         return violations
 
-    def _resource_controllers(self) -> set[str]:
+    def _resource_controllers(self) -> set[tuple[tuple[str, ...], str]]:
         routes_path = self.root / "config" / "routes.py"
         if not routes_path.is_file():
             return set()
@@ -278,18 +286,60 @@ class ConventionInspector:
         except SyntaxError:
             return set()
 
-        controllers = set()
-        for node in ast.walk(tree):
-            is_resources_call = (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "resources"
-                and len(node.args) >= 2
-                and isinstance(node.args[1], ast.Name)
-            )
-            if is_resources_call:
-                controllers.add(node.args[1].id)
+        controllers: set[tuple[tuple[str, ...], str]] = set()
+
+        def collect(statements: list[ast.stmt], groups: tuple[str, ...]) -> None:
+            for node in statements:
+                nested_group = self._group_from_with(node)
+                if nested_group:
+                    collect(node.body, (*groups, nested_group))
+                    continue
+
+                if not isinstance(node, ast.Expr) or not isinstance(
+                    node.value, ast.Call
+                ):
+                    continue
+                call = node.value
+                is_resources_call = (
+                    isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "resources"
+                )
+                if not is_resources_call or not call.args:
+                    continue
+
+                if len(call.args) >= 2 and isinstance(call.args[1], ast.Name):
+                    controllers.add((groups, call.args[1].id))
+                    continue
+                path = (
+                    call.args[0].value
+                    if isinstance(call.args[0], ast.Constant)
+                    else None
+                )
+                if not isinstance(path, str):
+                    continue
+                resource = path.rstrip("/").rsplit("/", 1)[-1].replace("-", "_")
+                controller = "".join(part.capitalize() for part in resource.split("_"))
+                controllers.add((groups, f"{controller}Controller"))
+
+        collect(tree.body, ())
         return controllers
+
+    def _group_from_with(self, node: ast.stmt) -> str | None:
+        if not isinstance(node, ast.With) or len(node.items) != 1:
+            return None
+        expression = node.items[0].context_expr
+        is_group_call = (
+            isinstance(expression, ast.Call)
+            and isinstance(expression.func, ast.Attribute)
+            and expression.func.attr == "group"
+            and len(expression.args) == 1
+            and isinstance(expression.args[0], ast.Constant)
+            and isinstance(expression.args[0].value, str)
+        )
+        if not is_group_call:
+            return None
+        path = expression.args[0].value
+        return path.removeprefix("/")
 
     def _misplaced_files(self) -> list[ConventionViolation]:
         violations = []
@@ -298,7 +348,7 @@ class ConventionInspector:
             return violations
         correct = self.root / "app" / "controllers"
         for path in app.rglob("*_controller.py"):
-            if path.parent == correct:
+            if path.is_relative_to(correct):
                 continue
             violations.append(
                 ConventionViolation(

@@ -35,12 +35,50 @@ include `BINGO.md` with concise architectural rules for coding agents.
 Routes have one home and one syntax:
 
 ```python
-from app.controllers.posts_controller import PostsController
 from bingo import Router
 
 routes = Router()
-routes.resources("/posts", PostsController)
+routes.resources("/posts")
+routes.get("/posts/published", "PostsController.published")
 ```
+
+Resource controllers are inferred from the resource path:
+
+```text
+/posts → app/controllers/posts_controller.py → PostsController
+```
+
+Custom routes use a `"Controller.action"` target and an explicit HTTP verb.
+Controllers are imported lazily when the application boots, after `config/routes.py`
+has finished loading, so route files do not import application controllers.
+
+Groups prefix both the URL and controller directory:
+
+```python
+with routes.group("/admin"):
+    routes.resources("/posts")
+    routes.get("/posts/published", "PostsController.published")
+```
+
+```text
+/admin/posts
+→ app/controllers/admin/posts_controller.py
+→ PostsController
+→ app/views/admin/posts/
+```
+
+The directory is the group, so controller classes remain short. Group blocks can
+nest, and every group name uses the same slash-prefixed path syntax:
+
+```python
+with routes.group("/admin"):
+    with routes.group("/reports"):
+        routes.resources("/sales")
+```
+
+This resolves `SalesController` from
+`app/controllers/admin/reports/sales_controller.py` and serves it under
+`/admin/reports/sales`.
 
 Resource controllers provide the seven actions `index`, `show`, `new`, `create`,
 `edit`, `update`, and `destroy`. They receive `self.request`, `self.params`,
