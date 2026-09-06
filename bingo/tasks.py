@@ -180,15 +180,15 @@ def _task_queue_url() -> str:
     url = settings.TASK_QUEUE_URL
     if not isinstance(url, str) or not url:
         raise BingoTaskError(
-            "TASK_QUEUE_URL must be a PostgreSQL or Redis URL before tasks can be "
+            "TASK_QUEUE_URL must be a Redis or PostgreSQL URL before tasks can be "
             "enqueued."
         )
 
     scheme = urlparse(url).scheme.lower()
     if scheme not in SUPPORTED_SCHEMES:
         raise BingoTaskError(
-            "TASK_QUEUE_URL supports PostgreSQL and Redis. Use a postgres://, "
-            "postgresql://, redis://, or rediss:// URL."
+            "TASK_QUEUE_URL supports Redis and PostgreSQL. Use a redis://, "
+            "rediss://, postgres://, or postgresql:// URL."
         )
     return url
 

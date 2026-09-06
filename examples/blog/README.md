@@ -2,10 +2,28 @@
 
 A Bingo application.
 
+Start the Redis service used by background tasks and realtime channels:
+
+```bash
+docker compose up -d --wait
+```
+
+Then prepare and run the application:
+
 ```bash
 python manage.py migrate
 python manage.py server
 ```
+
+Run the test suite with:
+
+```bash
+python -m pytest
+```
+
+Tests use SQLite and Bingo's in-memory task and channel backends, so they do not
+require Docker. Redis is provided for exercising the development application
+across server and worker processes.
 
 Generate and run background tasks with:
 
@@ -14,8 +32,8 @@ python manage.py generate task PublishPost
 python manage.py worker
 ```
 
-Tasks use the PostgreSQL URL in `TASK_QUEUE_URL` by default. Redis URLs are also
-supported without changing application task code.
+Tasks and channels use the Redis URL in `TASK_QUEUE_URL` by default. PostgreSQL is
+also supported by installing `bingo-framework[postgres]` and changing the URL.
 
 Open `http://127.0.0.1:8000/chat` in two browser tabs to try the realtime channel
 demo. The page uses Bingo's `/channels.js` wrapper, `ChatChannel`, a standard
@@ -36,3 +54,6 @@ errors; the form controls are produced by `form(validator)` in the template.
 conventional `PostsController` lazily.
 
 Application commands live in `app/commands/` and run through `python manage.py`.
+
+Stop the development service with `docker compose down`. Its data remains in the
+`blog_redis-data` volume between runs.

@@ -155,7 +155,7 @@ def channel_backend(url: str):
         return RedisChannelBackend(url)
     if scheme in {"postgres", "postgresql"}:
         return PostgresChannelBackend(url)
-    raise BingoChannelError("CHANNEL_URL supports memory, PostgreSQL, and Redis URLs.")
+    raise BingoChannelError("CHANNEL_URL supports memory, Redis, and PostgreSQL URLs.")
 
 
 def _postgres_channel(stream: str) -> str:

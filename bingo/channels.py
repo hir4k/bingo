@@ -546,7 +546,7 @@ def _channel_url() -> str:
     scheme = urlparse(url).scheme.lower()
     if scheme not in {"memory", "postgres", "postgresql", "redis", "rediss"}:
         raise BingoChannelError(
-            "CHANNEL_URL supports memory://, PostgreSQL, and Redis URLs."
+            "CHANNEL_URL supports memory://, Redis, and PostgreSQL URLs."
         )
     return url
 

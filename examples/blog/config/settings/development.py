@@ -7,7 +7,7 @@ DATABASE_URL = os.getenv(
 )
 TASK_QUEUE_URL = os.getenv(
     "TASK_QUEUE_URL",
-    "postgres://postgres@localhost/blog_tasks",
+    "redis://localhost:6379/0",
 )
 CHANNEL_URL = os.getenv("CHANNEL_URL", TASK_QUEUE_URL)
 SERVER_RELOAD = True

@@ -29,6 +29,7 @@ def test_settings_merge_base_and_selected_environment(
     assert settings.CUSTOM_TITLE == "Test"
     assert settings.TEST_ONLY == 42
     assert settings.SERVER_HOST == "127.0.0.1"
+    assert settings.TASK_QUEUE_URL == "redis://localhost:6379/0"
     assert settings.CHANNEL_URL == "memory://"
 
 

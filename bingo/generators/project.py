@@ -131,7 +131,7 @@ class ProjectGenerator:
             ".env.example": (
                 "BINGO_ENV=development\n"
                 "DATABASE_URL=sqlite+aiosqlite:///db/development.sqlite3\n"
-                f"TASK_QUEUE_URL=postgres://postgres@localhost/{name}_tasks\n"
+                "TASK_QUEUE_URL=redis://localhost:6379/0\n"
             ),
             ".gitignore": "__pycache__/\n*.py[cod]\n.venv/\n.env\ndb/*.sqlite3\n",
             "pyproject.toml": PROJECT_TOML.format(name=name),
@@ -293,7 +293,7 @@ PUBLIC_URL = "/public"
 PUBLIC_DIRECTORY = "public"
 PUBLIC_CACHE_SECONDS = 86400
 
-TASK_QUEUE_URL = "postgres://postgres@localhost/{name}_tasks"
+TASK_QUEUE_URL = "redis://localhost:6379/0"
 TASK_CONCURRENCY = 10
 TASK_DEFAULT_RETRIES = 3
 TASK_DEFAULT_TIMEOUT = 60
@@ -315,7 +315,7 @@ DATABASE_URL = os.getenv(
 )
 TASK_QUEUE_URL = os.getenv(
     "TASK_QUEUE_URL",
-    "postgres://postgres@localhost/{name}_tasks",
+    "redis://localhost:6379/0",
 )
 CHANNEL_URL = os.getenv("CHANNEL_URL", TASK_QUEUE_URL)
 SERVER_RELOAD = True
@@ -374,7 +374,8 @@ representation of the same controller action.
 
 Background tasks live in `app/tasks/`. Generate one with
 `python manage.py generate task SendWelcomeEmail`, enqueue it through its class,
-and process it with `python manage.py worker`.
+and process it with `python manage.py worker`. Tasks and channels share Redis at
+`redis://localhost:6379/0` by default.
 
 Realtime channels live in `app/channels/` and use the automatic `/channels`
 WebSocket endpoint. Generate one with `python manage.py generate channel Chat
@@ -409,9 +410,10 @@ IDs, not model instances. Enqueue work only through
 
 Run the default queue with `python manage.py worker`. A task can declare
 `queue = "mailers"`; process it with `python manage.py worker --queue mailers`.
-PostgreSQL is the default backend, and Redis is also accepted through
-`TASK_QUEUE_URL`. Do not import SAQ in application code. Test settings execute
-tasks inline through `TASKS_INLINE = True`.
+Redis is the default backend. PostgreSQL is also accepted through
+`TASK_QUEUE_URL` when the `bingo-framework[postgres]` extra is installed. Do not
+import SAQ in application code. Test settings execute tasks inline through
+`TASKS_INLINE = True`.
 
 ## Realtime channels
 
@@ -429,7 +431,8 @@ messages use ordinary Bingo validators; validation failures become a
 
 Shared connection setup belongs only in `ApplicationConnection.connect()`, which
 may attach application-defined state or call `self.reject()`. The framework does
-not provide a user model. `CHANNEL_URL` accepts PostgreSQL or Redis; tests use
+not provide a user model. `CHANNEL_URL` uses Redis by default and also accepts
+PostgreSQL when the `bingo-framework[postgres]` extra is installed. Tests use
 `memory://`. Broadcasts are ephemeral, so persistent data belongs in models.
 
 ## Controllers

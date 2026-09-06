@@ -12,7 +12,7 @@ PUBLIC_URL = "/public"
 PUBLIC_DIRECTORY = "public"
 PUBLIC_CACHE_SECONDS = 86400
 
-TASK_QUEUE_URL = "postgres://postgres@localhost/blog_tasks"
+TASK_QUEUE_URL = "redis://localhost:6379/0"
 TASK_CONCURRENCY = 10
 TASK_DEFAULT_RETRIES = 3
 TASK_DEFAULT_TIMEOUT = 60

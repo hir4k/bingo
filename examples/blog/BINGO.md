@@ -22,8 +22,9 @@ such as `send_welcome_email_task.py` and `SendWelcomeEmailTask`. It inherits fro
 JSON-compatible arguments. Enqueue it with `await SendWelcomeEmailTask.enqueue(...)`.
 Pass model IDs, never model instances. Run tasks with `python manage.py worker` or
 select a named queue with `python manage.py worker --queue mailers`. Configure the
-backend only through `TASK_QUEUE_URL`; PostgreSQL is the default and Redis is also
-supported. Keep `TASKS_INLINE = True` in test settings only.
+backend only through `TASK_QUEUE_URL`; Redis is the default and PostgreSQL is also
+supported through the `bingo-framework[postgres]` extra. Keep
+`TASKS_INLINE = True` in test settings only.
 
 ## Realtime channels
 

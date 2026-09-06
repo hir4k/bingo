@@ -122,13 +122,14 @@ python manage.py worker
 python manage.py worker --queue mailers
 ```
 
-`TASK_QUEUE_URL` selects the backend. Bingo defaults to PostgreSQL and accepts
-Redis without changing task code:
+`TASK_QUEUE_URL` selects the backend. Bingo defaults to Redis:
 
 ```python
-TASK_QUEUE_URL = "postgres://postgres@localhost/blog_tasks"
-# or: TASK_QUEUE_URL = "redis://localhost:6379/0"
+TASK_QUEUE_URL = "redis://localhost:6379/0"
 ```
+
+PostgreSQL is also supported without changing task code. Install
+`bingo-framework[postgres]` and use a `postgres://` or `postgresql://` URL.
 
 Task arguments and return values must be JSON-compatible. Pass model IDs instead
 of model instances, and make tasks safe to execute more than once because durable
@@ -194,7 +195,8 @@ Channels and tasks may share infrastructure without sharing semantics:
 CHANNEL_URL = TASK_QUEUE_URL
 ```
 
-PostgreSQL uses `LISTEN/NOTIFY`; Redis uses Pub/Sub. Tests use `memory://`.
+Redis uses Pub/Sub. PostgreSQL `LISTEN/NOTIFY` remains available through the
+`bingo-framework[postgres]` extra. Tests use `memory://`.
 Broadcasts are online-only, so persist anything clients must retrieve after
 reconnecting. Configure additional browser origins with
 `CHANNEL_ALLOWED_ORIGINS`; same-origin connections are accepted automatically.
