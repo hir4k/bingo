@@ -26,6 +26,11 @@ Bingo derives the application name from the current directory. Unrelated files
 are preserved. If a generated path already exists, Bingo reports every conflict
 before writing anything.
 
+New applications include a welcome controller and view at `/`, plus a small
+stylesheet in `public/`, so `bingo server` immediately opens a working page.
+Granian is Bingo's ASGI server and serves `/public` directly without sending
+static-file requests through Python.
+
 Applications use class controllers, routes in `config/routes.py`, async models,
 standalone validators, Jinja templates, and Bingo migrations. Generated projects
 include `BINGO.md` with concise architectural rules for coding agents.
@@ -194,6 +199,9 @@ bingo inspect
 Generated projects use SQLite by default and accept `DATABASE_URL` for another
 SQLAlchemy async database URL. `bingo inspect` reports convention violations with
 the problem, expected structure, and a suggested fix.
+
+`bingo server` maps the project's `public/` directory to `/public` through
+Granian. Application routes do not need a static-files route or controller.
 
 See [`examples/blog`](examples/blog) for a complete generated Post resource.
 

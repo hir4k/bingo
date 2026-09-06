@@ -13,6 +13,13 @@ def test_new_project_and_all_generators(tmp_path: Path):
     root = ProjectGenerator().generate("journal", tmp_path)
     assert (root / "BINGO.md").is_file()
     assert "class JournalApplication" in (root / "config/application.py").read_text()
+    assert (root / "app/controllers/welcome_controller.py").is_file()
+    assert (root / "app/views/welcome/index.html").is_file()
+    assert (root / "public/application.css").is_file()
+    assert (
+        'routes.get("/", "WelcomeController.index")'
+        in (root / "config/routes.py").read_text()
+    )
 
     generator = ResourceGenerator(root)
     generated = generator.generate(

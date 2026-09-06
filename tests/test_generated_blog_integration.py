@@ -28,6 +28,11 @@ async def test_generated_blog_performs_complete_post_crud(
 
     transport = httpx.ASGITransport(app=application)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        welcome = await client.get("/")
+        assert welcome.status_code == 200
+        assert "Your application is running." in welcome.text
+        assert 'href="/public/application.css"' in welcome.text
+
         assert (await client.get("/posts")).status_code == 200
         new = await client.get("/posts/new")
         assert new.status_code == 200

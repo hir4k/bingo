@@ -7,8 +7,6 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import PlainTextResponse
-from starlette.routing import Mount
-from starlette.staticfiles import StaticFiles
 
 from bingo.db.database import database
 from bingo.exceptions import BingoError, BingoNotFoundError, BingoValidationError
@@ -76,17 +74,10 @@ class Application:
         if database_url:
             database.configure(database_url)
 
-        starlette_routes = self.router.starlette_routes(self)
-        public = self.root_path / "public"
-        if public.is_dir():
-            starlette_routes.append(
-                Mount("/public", app=StaticFiles(directory=public), name="public")
-            )
-
         middleware = [Middleware(SessionMiddleware, secret_key=self.secret_key)]
         starlette = Starlette(
             debug=self.debug,
-            routes=starlette_routes,
+            routes=self.router.starlette_routes(self),
             middleware=middleware,
             exception_handlers={
                 BingoNotFoundError: self._not_found,
