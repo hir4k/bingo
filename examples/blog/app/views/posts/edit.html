@@ -1,0 +1,15 @@
+{% extends "layouts/application.html" %}
+{% block content %}
+<h1>Edit Post</h1>
+<form method="post" action="/posts/{{ post.id }}">
+    <input type="hidden" name="_method" value="PATCH">
+{% for field in form(validator) %}
+<p>
+    <label for="{{ field.name }}">{{ field.label }}</label>
+    {{ field }}
+    {{ field.errors }}
+</p>
+{% endfor %}
+    <button type="submit">Update Post</button>
+</form>
+{% endblock %}

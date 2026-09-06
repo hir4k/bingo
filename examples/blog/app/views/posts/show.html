@@ -1,0 +1,18 @@
+{% extends "layouts/application.html" %}
+{% block content %}
+<h1>Post</h1>
+<dl>
+<dt>Title</dt>
+<dd>{{ post.title }}</dd>
+<dt>Body</dt>
+<dd>{{ post.body }}</dd>
+<dt>Published</dt>
+<dd>{{ post.published }}</dd>
+</dl>
+<p><a href="/posts/{{ post.id }}/edit">Edit</a></p>
+<form method="post" action="/posts/{{ post.id }}">
+    <input type="hidden" name="_method" value="DELETE">
+    <button type="submit">Delete</button>
+</form>
+<p><a href="/posts">Back</a></p>
+{% endblock %}

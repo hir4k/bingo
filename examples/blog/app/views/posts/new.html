@@ -1,0 +1,14 @@
+{% extends "layouts/application.html" %}
+{% block content %}
+<h1>New Post</h1>
+<form method="post" action="/posts">
+{% for field in form(validator) %}
+<p>
+    <label for="{{ field.name }}">{{ field.label }}</label>
+    {{ field }}
+    {{ field.errors }}
+</p>
+{% endfor %}
+    <button type="submit">Create Post</button>
+</form>
+{% endblock %}
