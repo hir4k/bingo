@@ -12,12 +12,16 @@ def class_name(value: str) -> str:
 
 class ProjectGenerator:
     DIRECTORIES = (
+        "app/channels",
+        "app/commands",
         "app/controllers",
         "app/models",
+        "app/tasks",
         "app/validators",
         "app/views/layouts",
         "app/views/welcome",
         "config",
+        "config/settings",
         "db/migrations",
         "public",
         "tests",
@@ -82,6 +86,10 @@ class ProjectGenerator:
     def _files(self, name: str, app_class: str) -> dict[str, str]:
         return {
             "app/__init__.py": "",
+            "app/channels/__init__.py": "",
+            "app/channels/application_channel.py": APPLICATION_CHANNEL,
+            "app/channels/application_connection.py": APPLICATION_CONNECTION,
+            "app/commands/__init__.py": "",
             "app/controllers/__init__.py": "",
             "app/controllers/application_controller.py": (
                 "from bingo import Controller\n\n\n"
@@ -90,15 +98,15 @@ class ProjectGenerator:
             ),
             "app/controllers/welcome_controller.py": WELCOME_CONTROLLER,
             "app/models/__init__.py": "",
+            "app/tasks/__init__.py": "",
+            "app/tasks/application_task.py": APPLICATION_TASK,
             "app/validators/__init__.py": "",
             "config/__init__.py": "",
-            "config/database.py": (
-                "import os\n\n\n"
-                "DATABASE_URL = os.getenv(\n"
-                '    "DATABASE_URL",\n'
-                '    "sqlite+aiosqlite:///db/development.sqlite3",\n'
-                ")\n"
-            ),
+            "config/settings/__init__.py": "",
+            "config/settings/base.py": SETTINGS_BASE.format(name=name),
+            "config/settings/development.py": SETTINGS_DEVELOPMENT.format(name=name),
+            "config/settings/test.py": SETTINGS_TEST,
+            "config/settings/production.py": SETTINGS_PRODUCTION,
             "config/routes.py": (
                 "from bingo import Router\n\n\n"
                 "routes = Router()\n\n"
@@ -107,21 +115,24 @@ class ProjectGenerator:
             "config/application.py": (
                 "from pathlib import Path\n\n"
                 "from bingo import Application\n\n"
-                "from config.database import DATABASE_URL\n"
                 "from config.routes import routes\n\n\n"
                 f"class {app_class}(Application):\n"
-                "    debug = True\n\n\n"
+                "    pass\n\n\n"
                 "ROOT = Path(__file__).resolve().parent.parent\n"
                 f"app = {app_class}(\n"
                 "    routes,\n"
                 "    root_path=ROOT,\n"
-                "    database_url=DATABASE_URL,\n"
                 ")\n"
             ),
             "app/views/layouts/application.html": LAYOUT,
             "app/views/welcome/index.html": WELCOME_VIEW,
             "public/application.css": APPLICATION_CSS,
-            ".env.example": "DATABASE_URL=sqlite+aiosqlite:///db/development.sqlite3\n",
+            "manage.py": MANAGE,
+            ".env.example": (
+                "BINGO_ENV=development\n"
+                "DATABASE_URL=sqlite+aiosqlite:///db/development.sqlite3\n"
+                f"TASK_QUEUE_URL=postgres://postgres@localhost/{name}_tasks\n"
+            ),
             ".gitignore": "__pycache__/\n*.py[cod]\n.venv/\n.env\ndb/*.sqlite3\n",
             "pyproject.toml": PROJECT_TOML.format(name=name),
             "README.md": PROJECT_README.format(name=name),
@@ -161,8 +172,8 @@ WELCOME_VIEW = """{% extends "layouts/application.html" %}
     </p>
     <section>
         <p>Build your first resource:</p>
-        <code>bingo generate resource Post title:string body:text</code>
-        <code>bingo migrate</code>
+        <code>python manage.py generate resource Post title:string body:text</code>
+        <code>python manage.py migrate</code>
         <p>Then open <a href="/posts">/posts</a>.</p>
     </section>
 </main>
@@ -241,6 +252,93 @@ a {
 }
 """
 
+MANAGE = """from bingo import manage
+
+if __name__ == "__main__":
+    raise SystemExit(manage())
+"""
+
+APPLICATION_TASK = """from bingo import Task
+
+
+class ApplicationTask(Task):
+    pass
+"""
+
+APPLICATION_CONNECTION = """from bingo import Connection
+
+
+class ApplicationConnection(Connection):
+    pass
+"""
+
+APPLICATION_CHANNEL = """from bingo import Channel
+
+
+class ApplicationChannel(Channel):
+    pass
+"""
+
+SETTINGS_BASE = """APP_NAME = "{name}"
+DEBUG = False
+SECRET_KEY = "development-only-change-me"
+DATABASE_URL = None
+
+SERVER_HOST = "127.0.0.1"
+SERVER_PORT = 8000
+SERVER_WORKERS = 1
+SERVER_RELOAD = False
+
+PUBLIC_URL = "/public"
+PUBLIC_DIRECTORY = "public"
+PUBLIC_CACHE_SECONDS = 86400
+
+TASK_QUEUE_URL = "postgres://postgres@localhost/{name}_tasks"
+TASK_CONCURRENCY = 10
+TASK_DEFAULT_RETRIES = 3
+TASK_DEFAULT_TIMEOUT = 60
+TASKS_INLINE = False
+
+CHANNEL_URL = TASK_QUEUE_URL
+CHANNEL_PATH = "/channels"
+CHANNEL_ALLOWED_ORIGINS = []
+CHANNEL_BUFFER_SIZE = 100
+CHANNEL_MAX_MESSAGE_BYTES = 65536
+"""
+
+SETTINGS_DEVELOPMENT = """import os
+
+DEBUG = True
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite+aiosqlite:///db/development.sqlite3",
+)
+TASK_QUEUE_URL = os.getenv(
+    "TASK_QUEUE_URL",
+    "postgres://postgres@localhost/{name}_tasks",
+)
+CHANNEL_URL = os.getenv("CHANNEL_URL", TASK_QUEUE_URL)
+SERVER_RELOAD = True
+PUBLIC_CACHE_SECONDS = 0
+"""
+
+SETTINGS_TEST = """DEBUG = True
+DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+PUBLIC_CACHE_SECONDS = 0
+TASKS_INLINE = True
+CHANNEL_URL = "memory://"
+"""
+
+SETTINGS_PRODUCTION = """import os
+
+SECRET_KEY = os.environ["SECRET_KEY"]
+DATABASE_URL = os.environ["DATABASE_URL"]
+SERVER_HOST = "0.0.0.0"
+SERVER_WORKERS = int(os.getenv("SERVER_WORKERS", "4"))
+TASK_QUEUE_URL = os.environ["TASK_QUEUE_URL"]
+CHANNEL_URL = os.getenv("CHANNEL_URL", TASK_QUEUE_URL)
+"""
+
 PROJECT_TOML = """[build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -249,7 +347,7 @@ build-backend = "hatchling.build"
 name = "{name}"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["bingo-framework>=0.1"]
+dependencies = ["bingo-framework>=0.2"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -261,20 +359,78 @@ PROJECT_README = """# {name}
 A Bingo application.
 
 ```bash
-bingo migrate
-bingo server
+python manage.py migrate
+python manage.py server
 ```
 
 Open `http://127.0.0.1:8000` to see the generated welcome page. Granian serves
 files in `public/` at `/public` automatically.
 
+Set `BINGO_ENV` to load `config/settings/base.py` followed by the matching
+environment file. The default environment is `development`.
+
 Resource HTML uses unsuffixed URLs. Add `.json` to request the colocated `.bjson`
 representation of the same controller action.
+
+Background tasks live in `app/tasks/`. Generate one with
+`python manage.py generate task SendWelcomeEmail`, enqueue it through its class,
+and process it with `python manage.py worker`.
+
+Realtime channels live in `app/channels/` and use the automatic `/channels`
+WebSocket endpoint. Generate one with `python manage.py generate channel Chat
+message`, then load `/channels.js` in the browser.
 """
 
 BINGO_RULES = """# Bingo Project Rules
 
 This application uses Bingo. Do not invent alternative architecture.
+
+## Settings and commands
+
+Shared settings live in `config/settings/base.py`; environment overrides live in
+`config/settings/development.py`, `test.py`, and `production.py`. Bingo loads
+uppercase names from base and then the environment selected by `BINGO_ENV`, which
+defaults to `development`. Access values through `from bingo import settings`.
+Do not add another configuration system.
+
+Inside this project, run framework commands through `python manage.py`. Custom
+commands live directly in `app/commands/`. A file such as `publish_posts.py`
+defines exactly one `Command(BaseCommand)` with one async `handle()` method. Its
+filename is the command name. Required parameters are positional; parameters with
+defaults are options; booleans are flags.
+
+## Background tasks
+
+Tasks live directly in `app/tasks/`. Each file defines one matching task class:
+`send_welcome_email_task.py` defines `SendWelcomeEmailTask(ApplicationTask)` with
+one async `run()` method. Task arguments are typed and JSON-compatible. Pass model
+IDs, not model instances. Enqueue work only through
+`await SendWelcomeEmailTask.enqueue(...)`.
+
+Run the default queue with `python manage.py worker`. A task can declare
+`queue = "mailers"`; process it with `python manage.py worker --queue mailers`.
+PostgreSQL is the default backend, and Redis is also accepted through
+`TASK_QUEUE_URL`. Do not import SAQ in application code. Test settings execute
+tasks inline through `TASKS_INLINE = True`.
+
+## Realtime channels
+
+Channels live directly in `app/channels/`. `chat_channel.py` defines exactly one
+`ChatChannel(ApplicationChannel)` with async `subscribed()` and `received()`
+methods. Register streams with `await self.stream(key)`. Do not add channel routes;
+Bingo provides the single `/channels` WebSocket endpoint and `/channels.js`
+browser client.
+
+Broadcast with `await ChatChannel.broadcast(key, "message", **context)`. Bingo
+renders `app/views/channels/chat/message.bjson` and sends the result as the
+`message` event. Do not send models or hand-built serialized payloads. Incoming
+messages use ordinary Bingo validators; validation failures become a
+`validation_error` channel event.
+
+Shared connection setup belongs only in `ApplicationConnection.connect()`, which
+may attach application-defined state or call `self.reject()`. The framework does
+not provide a user model. `CHANNEL_URL` accepts PostgreSQL or Redis; tests use
+`memory://`. Broadcasts are ephemeral, so persistent data belongs in models.
 
 ## Controllers
 
@@ -330,7 +486,7 @@ conventions over custom abstractions. Controllers coordinate workflows and model
 hold reusable entity behavior. Do not introduce services, presenters, serializers,
 or separate API controllers.
 
-Run the application with `bingo server`. Granian serves the `public/` directory
-at `/public`; do not add a static-files route or ASGI static middleware. After
-changes, run `bingo inspect`.
+Run the application with `python manage.py server`. Granian serves the `public/`
+directory at `/public`; do not add a static-files route or ASGI static middleware.
+After changes, run `python manage.py inspect`.
 """

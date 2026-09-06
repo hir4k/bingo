@@ -6,13 +6,27 @@ from typer.testing import CliRunner
 from bingo.cli.app import app
 from bingo.conventions import ConventionInspector
 from bingo.exceptions import BingoConventionError
-from bingo.generators import ProjectGenerator, ResourceGenerator
+from bingo.generators import (
+    ChannelGenerator,
+    ProjectGenerator,
+    ResourceGenerator,
+    TaskGenerator,
+)
+from bingo.management import build_management_app
 
 
 def test_new_project_and_all_generators(tmp_path: Path):
     root = ProjectGenerator().generate("journal", tmp_path)
     assert (root / "BINGO.md").is_file()
+    assert (root / "manage.py").is_file()
+    assert (root / "app/commands/__init__.py").is_file()
+    assert (root / "app/channels/application_channel.py").is_file()
+    assert (root / "app/channels/application_connection.py").is_file()
+    assert (root / "app/tasks/application_task.py").is_file()
     assert "class JournalApplication" in (root / "config/application.py").read_text()
+    assert (root / "config/settings/base.py").is_file()
+    assert (root / "config/settings/development.py").is_file()
+    assert not (root / "config/database.py").exists()
     assert (root / "app/controllers/welcome_controller.py").is_file()
     assert (root / "app/views/welcome/index.html").is_file()
     assert (root / "public/application.css").is_file()
@@ -44,6 +58,12 @@ def test_new_project_and_all_generators(tmp_path: Path):
     assert (root / "app/controllers/comments_controller.py").exists()
     assert (root / "app/validators/comment_create_validator.py").exists()
 
+    task = TaskGenerator(root).generate("PublishPost")
+    assert task.name == "publish_post_task.py"
+    channel = ChannelGenerator(root).generate("Notifications", ["created"])
+    assert channel[0].name == "notifications_channel.py"
+    assert ConventionInspector(root).inspect() == []
+
 
 def test_cli_new_and_resource_generation(tmp_path: Path, monkeypatch):
     runner = CliRunner()
@@ -53,11 +73,19 @@ def test_cli_new_and_resource_generation(tmp_path: Path, monkeypatch):
     root = tmp_path / "notes"
     monkeypatch.chdir(root)
     result = runner.invoke(
-        app,
+        build_management_app(root),
         ["generate", "resource", "Note", "title:string", "body:text"],
     )
     assert result.exit_code == 0, result.output
     assert (root / "app/controllers/notes_controller.py").is_file()
+
+    result = runner.invoke(
+        build_management_app(root),
+        ["generate", "channel", "Chat", "message"],
+    )
+    assert result.exit_code == 0, result.output
+    assert (root / "app/channels/chat_channel.py").is_file()
+    assert (root / "app/views/channels/chat/message.bjson").is_file()
 
 
 def test_cli_new_dot_initializes_the_current_directory(tmp_path: Path, monkeypatch):
@@ -134,3 +162,63 @@ def test_inspector_rejects_non_canonical_application_layers(tmp_path: Path):
 
     violations = ConventionInspector(root).inspect()
     assert any("non-canonical application layer" in item.problem for item in violations)
+
+
+def test_inspector_rejects_invalid_application_commands(tmp_path: Path):
+    root = ProjectGenerator().generate("commands", tmp_path)
+    command = root / "app" / "commands" / "publish_posts.py"
+    command.write_text(
+        """from bingo import BaseCommand
+
+
+class Command(BaseCommand):
+    def handle(self, limit):
+        pass
+""",
+        encoding="utf-8",
+    )
+
+    text = "\n".join(str(item) for item in ConventionInspector(root).inspect())
+
+    assert "asynchronous handle method" in text
+
+
+def test_inspector_rejects_invalid_application_tasks(tmp_path: Path):
+    root = ProjectGenerator().generate("tasks", tmp_path)
+    task = root / "app" / "tasks" / "deliver_email_task.py"
+    task.write_text(
+        """from app.tasks.application_task import ApplicationTask
+
+
+class DeliverEmailTask(ApplicationTask):
+    def run(self, payload):
+        pass
+""",
+        encoding="utf-8",
+    )
+
+    text = "\n".join(str(item) for item in ConventionInspector(root).inspect())
+
+    assert "asynchronous run method" in text
+
+
+def test_inspector_rejects_invalid_application_channels(tmp_path: Path):
+    root = ProjectGenerator().generate("channels", tmp_path)
+    channel = root / "app" / "channels" / "chat_channel.py"
+    channel.write_text(
+        """from app.channels.application_channel import ApplicationChannel
+
+
+class ChatChannel(ApplicationChannel):
+    def subscribed(self):
+        pass
+
+    async def received(self, data: dict):
+        pass
+""",
+        encoding="utf-8",
+    )
+
+    text = "\n".join(str(item) for item in ConventionInspector(root).inspect())
+
+    assert "lifecycle methods must be asynchronous: subscribed" in text

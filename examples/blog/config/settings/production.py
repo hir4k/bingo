@@ -1,0 +1,8 @@
+import os
+
+SECRET_KEY = os.environ["SECRET_KEY"]
+DATABASE_URL = os.environ["DATABASE_URL"]
+SERVER_HOST = "0.0.0.0"
+SERVER_WORKERS = int(os.getenv("SERVER_WORKERS", "4"))
+TASK_QUEUE_URL = os.environ["TASK_QUEUE_URL"]
+CHANNEL_URL = os.getenv("CHANNEL_URL", TASK_QUEUE_URL)

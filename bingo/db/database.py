@@ -29,8 +29,8 @@ class Database:
     async def session(self):
         if self._sessions is None:
             raise BingoDatabaseError(
-                "The database is not configured. Pass database_url to Application "
-                "or call bingo.db.database.configure(DATABASE_URL)."
+                "The database is not configured. Define DATABASE_URL in the active "
+                "config/settings environment."
             )
         async with self._sessions() as session:
             yield session

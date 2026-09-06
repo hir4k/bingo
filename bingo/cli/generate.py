@@ -5,7 +5,9 @@ import typer
 from rich.console import Console
 
 from bingo.cli.helpers import project_root
+from bingo.generators.channel import ChannelGenerator
 from bingo.generators.resource import ResourceGenerator, parse_fields
+from bingo.generators.task import TaskGenerator
 
 generate_app = typer.Typer(help="Generate conventional Bingo application code.")
 
@@ -47,3 +49,16 @@ def validator(
 ):
     generator = ResourceGenerator(project_root())
     _show(generator.generate_validator(name, parse_fields(fields or [])))
+
+
+@generate_app.command("task")
+def task(name: str):
+    _show([TaskGenerator(project_root()).generate(name)])
+
+
+@generate_app.command("channel")
+def channel(
+    name: str,
+    events: Annotated[list[str] | None, typer.Argument()] = None,
+):
+    _show(ChannelGenerator(project_root()).generate(name, events or []))

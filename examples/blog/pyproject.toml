@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "blog"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["bingo-framework>=0.1"]
+dependencies = ["bingo-framework>=0.2"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

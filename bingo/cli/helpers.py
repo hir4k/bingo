@@ -5,11 +5,18 @@ import sys
 from pathlib import Path
 
 from bingo.exceptions import BingoConventionError
+from bingo.settings import settings
 
 
 def project_root() -> Path:
     current = Path.cwd().resolve()
-    for path in (current, *current.parents):
+    candidates = [current, *current.parents]
+    command = Path(sys.argv[0]).resolve()
+    if command.name == "manage.py":
+        script_directory = command.parent
+        candidates.extend((script_directory, *script_directory.parents))
+
+    for path in dict.fromkeys(candidates):
         if (path / "config" / "application.py").is_file():
             return path
     raise BingoConventionError(
@@ -19,6 +26,7 @@ def project_root() -> Path:
 
 
 def load_application(root: Path):
+    settings.load(root)
     root_text = str(root)
     if root_text not in sys.path:
         sys.path.insert(0, root_text)

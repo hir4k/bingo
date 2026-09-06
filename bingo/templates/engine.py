@@ -86,6 +86,15 @@ class TemplateEngine:
         status: int,
         context: dict[str, Any],
     ) -> JSONResponse:
+        value = self.render_json_value(view_name, context=context)
+        return JSONResponse(value, status_code=status)
+
+    def render_json_value(
+        self,
+        view_name: str,
+        *,
+        context: dict[str, Any] | None = None,
+    ) -> Any:
         relative_path = Path(f"{view_name}.bjson")
         path = (self.root / relative_path).resolve()
         if not path.is_relative_to(self.root.resolve()) or not path.is_file():
@@ -94,14 +103,14 @@ class TemplateEngine:
             )
 
         expression = self.validate_json_view(path)
-        namespace = {"__builtins__": {}, **context}
+        namespace = {"__builtins__": {}, **(context or {})}
         try:
             value = eval(compile(expression, path, "eval"), namespace, {})
         except Exception as error:
             raise BingoJSONViewError(
                 f"Could not render {path}: {type(error).__name__}: {error}"
             ) from error
-        return JSONResponse(self._json_value(value, path), status_code=status)
+        return self._json_value(value, path)
 
     def validate_json_view(self, path: Path) -> ast.Expression:
         source = path.read_text(encoding="utf-8")

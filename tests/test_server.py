@@ -30,18 +30,19 @@ def test_server_uses_granian_and_serves_public_directly(
         lambda project_root: SimpleNamespace(),
     )
 
-    server_module.server(host="0.0.0.0", port=4321, reload=False)
+    server_module.server()
 
     assert calls["target"] == "config.application:app"
     assert calls["served"] is True
     assert calls["options"] == {
-        "address": "0.0.0.0",
-        "port": 4321,
+        "address": "127.0.0.1",
+        "port": 8000,
         "interface": Interfaces.ASGI,
+        "workers": 1,
         "working_dir": root,
         "static_path_route": ["/public"],
         "static_path_mount": [root / "public"],
         "static_path_expires": 0,
-        "reload": False,
+        "reload": True,
         "reload_paths": [root],
     }

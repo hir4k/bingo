@@ -1,0 +1,27 @@
+{% extends "layouts/application.html" %}
+{% block content %}
+<main class="chat">
+    <header>
+        <p class="eyebrow">Bingo Channels</p>
+        <h1>Lobby chat</h1>
+        <p>Messages are live and intentionally disappear when you disconnect.</p>
+        <a href="/posts">Back to posts</a>
+    </header>
+
+    <ol id="messages" aria-live="polite"></ol>
+    <p id="status">Connecting…</p>
+
+    <form id="chat-form">
+        <label for="name">Name</label>
+        <input id="name" name="name" maxlength="40" required>
+
+        <label for="body">Message</label>
+        <div class="message-entry">
+            <input id="body" name="body" maxlength="500" autocomplete="off" required>
+            <button type="submit" disabled>Send</button>
+        </div>
+    </form>
+</main>
+<script src="/channels.js"></script>
+<script src="/public/chat.js"></script>
+{% endblock %}

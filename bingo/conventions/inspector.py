@@ -13,13 +13,23 @@ RESOURCE_ACTIONS = {"index", "show", "new", "create", "edit", "update", "destroy
 
 class ConventionInspector:
     REQUIRED = (
+        "manage.py",
+        "app/channels/__init__.py",
+        "app/channels/application_channel.py",
+        "app/channels/application_connection.py",
+        "app/commands/__init__.py",
         "app/controllers/application_controller.py",
         "app/models/__init__.py",
+        "app/tasks/__init__.py",
+        "app/tasks/application_task.py",
         "app/validators/__init__.py",
         "app/views/layouts/application.html",
         "config/application.py",
-        "config/database.py",
         "config/routes.py",
+        "config/settings/base.py",
+        "config/settings/development.py",
+        "config/settings/test.py",
+        "config/settings/production.py",
         "db/migrations",
         "public",
         "tests",
@@ -34,6 +44,9 @@ class ConventionInspector:
         violations.extend(self._controller_violations())
         violations.extend(self._misplaced_files())
         violations.extend(self._json_view_violations())
+        violations.extend(self._command_violations())
+        violations.extend(self._task_violations())
+        violations.extend(self._channel_violations())
         violations.extend(self._forbidden_architecture())
         return violations
 
@@ -97,7 +110,10 @@ class ConventionInspector:
                     path=path,
                     problem=f"The controller is not valid Python: {error.msg}.",
                     expected="A Python module containing one controller class.",
-                    fix="Fix the syntax error, then run `bingo inspect` again.",
+                    fix=(
+                        "Fix the syntax error, then run `python manage.py inspect` "
+                        "again."
+                    ),
                 )
             ]
 
@@ -379,6 +395,359 @@ class ConventionInspector:
                     )
                 )
         return violations
+
+    def _command_violations(self) -> list[ConventionViolation]:
+        directory = self.root / "app" / "commands"
+        if not directory.is_dir():
+            return []
+
+        built_in_commands = {
+            "generate",
+            "inspect",
+            "migrate",
+            "rollback",
+            "routes",
+            "server",
+            "worker",
+        }
+        violations = []
+        for path in directory.glob("*.py"):
+            if path.name == "__init__.py":
+                continue
+            if not path.stem.isidentifier() or path.stem.startswith("_"):
+                violations.append(
+                    ConventionViolation(
+                        path=path,
+                        problem="Command filenames must be Python identifiers.",
+                        expected="A name such as publish_posts.py.",
+                        fix=f"Rename {path.name} to a valid command name.",
+                    )
+                )
+                continue
+            if path.stem in built_in_commands:
+                violations.append(
+                    ConventionViolation(
+                        path=path,
+                        problem="The command conflicts with a built-in Bingo command.",
+                        expected="A unique application command name.",
+                        fix=f"Rename {path.name}.",
+                    )
+                )
+                continue
+            violations.extend(self._inspect_command(path))
+        return violations
+
+    def _inspect_command(self, path: Path) -> list[ConventionViolation]:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as error:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem=f"The command is not valid Python: {error.msg}.",
+                    expected="One class named Command.",
+                    fix="Fix the syntax error, then run `python manage.py inspect`.",
+                )
+            ]
+
+        classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+        command_classes = [node for node in classes if node.name == "Command"]
+        has_one_command = len(classes) == 1 and len(command_classes) == 1
+        if not has_one_command:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="A command file must define exactly one Command class.",
+                    expected="class Command(BaseCommand): ...",
+                    fix="Remove other classes and name the command class Command.",
+                )
+            ]
+
+        command = command_classes[0]
+        inherits_base_command = any(
+            isinstance(base, ast.Name) and base.id == "BaseCommand"
+            for base in command.bases
+        )
+        if not inherits_base_command:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Command must inherit from Bingo BaseCommand.",
+                    expected="class Command(BaseCommand): ...",
+                    fix="Import BaseCommand from bingo and inherit from it.",
+                )
+            ]
+
+        handles = [
+            node for node in command.body if getattr(node, "name", None) == "handle"
+        ]
+        has_async_handle = len(handles) == 1 and isinstance(
+            handles[0], ast.AsyncFunctionDef
+        )
+        if not has_async_handle:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Command must define one asynchronous handle method.",
+                    expected="async def handle(self, ...): ...",
+                    fix="Define handle with async def.",
+                )
+            ]
+
+        handle = handles[0]
+        parameters = [
+            *handle.args.posonlyargs,
+            *handle.args.args,
+            *handle.args.kwonlyargs,
+        ]
+        if parameters and parameters[0].arg == "self":
+            parameters = parameters[1:]
+        untyped = [
+            parameter.arg for parameter in parameters if parameter.annotation is None
+        ]
+        if not untyped:
+            return []
+        names = ", ".join(untyped)
+        return [
+            ConventionViolation(
+                path=path,
+                problem=f"Command parameters need type annotations: {names}.",
+                expected="Typed parameters so Bingo can build the CLI.",
+                fix=f"Add type annotations to: {names}.",
+            )
+        ]
+
+    def _task_violations(self) -> list[ConventionViolation]:
+        directory = self.root / "app" / "tasks"
+        if not directory.is_dir():
+            return []
+
+        violations = []
+        for path in directory.glob("*.py"):
+            if path.name in {"__init__.py", "application_task.py"}:
+                continue
+            if not path.name.endswith("_task.py"):
+                violations.append(
+                    ConventionViolation(
+                        path=path,
+                        problem="Task filenames must end in `_task.py`.",
+                        expected="A name such as send_welcome_email_task.py.",
+                        fix=f"Rename {path.name} to {path.stem}_task.py.",
+                    )
+                )
+                continue
+            violations.extend(self._inspect_task(path))
+        return violations
+
+    def _inspect_task(self, path: Path) -> list[ConventionViolation]:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as error:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem=f"The task is not valid Python: {error.msg}.",
+                    expected="One conventional asynchronous task class.",
+                    fix="Fix the syntax error, then run `python manage.py inspect`.",
+                )
+            ]
+
+        expected_class = "".join(
+            part.capitalize() for part in path.stem.split("_") if part
+        )
+        classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+        has_expected_class = len(classes) == 1 and classes[0].name == expected_class
+        if not has_expected_class:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="The filename and task class disagree.",
+                    expected=f"Exactly one class named {expected_class}.",
+                    fix=f"Keep one class and name it {expected_class}.",
+                )
+            ]
+
+        task = classes[0]
+        inherits_application_task = any(
+            isinstance(base, ast.Name) and base.id == "ApplicationTask"
+            for base in task.bases
+        )
+        if not inherits_application_task:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Application tasks must inherit from ApplicationTask.",
+                    expected=f"class {expected_class}(ApplicationTask): ...",
+                    fix="Import and inherit from app.tasks.application_task.",
+                )
+            ]
+
+        run_methods = [
+            node for node in task.body if getattr(node, "name", None) == "run"
+        ]
+        has_async_run = len(run_methods) == 1 and isinstance(
+            run_methods[0], ast.AsyncFunctionDef
+        )
+        if not has_async_run:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Task must define one asynchronous run method.",
+                    expected="async def run(self, ...): ...",
+                    fix="Define run with async def.",
+                )
+            ]
+
+        run = run_methods[0]
+        has_variable_arguments = (
+            run.args.vararg is not None or run.args.kwarg is not None
+        )
+        if has_variable_arguments:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Task run methods require explicit arguments.",
+                    expected="Named, typed arguments containing JSON-compatible values.",
+                    fix="Replace *args and **kwargs with explicit arguments.",
+                )
+            ]
+
+        parameters = [*run.args.posonlyargs, *run.args.args, *run.args.kwonlyargs]
+        if parameters and parameters[0].arg == "self":
+            parameters = parameters[1:]
+        untyped = [
+            parameter.arg for parameter in parameters if parameter.annotation is None
+        ]
+        if not untyped:
+            return []
+
+        names = ", ".join(untyped)
+        return [
+            ConventionViolation(
+                path=path,
+                problem=f"Task arguments need type annotations: {names}.",
+                expected="Typed arguments containing JSON-compatible values.",
+                fix=f"Add type annotations to: {names}.",
+            )
+        ]
+
+    def _channel_violations(self) -> list[ConventionViolation]:
+        directory = self.root / "app" / "channels"
+        if not directory.is_dir():
+            return []
+
+        violations = []
+        for path in directory.glob("*.py"):
+            if path.name in {
+                "__init__.py",
+                "application_channel.py",
+                "application_connection.py",
+            }:
+                continue
+            if not path.name.endswith("_channel.py"):
+                violations.append(
+                    ConventionViolation(
+                        path=path,
+                        problem="Channel filenames must end in `_channel.py`.",
+                        expected="A name such as chat_channel.py.",
+                        fix=f"Rename {path.name} to {path.stem}_channel.py.",
+                    )
+                )
+                continue
+            violations.extend(self._inspect_channel(path))
+        return violations
+
+    def _inspect_channel(self, path: Path) -> list[ConventionViolation]:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as error:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem=f"The channel is not valid Python: {error.msg}.",
+                    expected="One conventional asynchronous channel class.",
+                    fix="Fix the syntax error, then run `python manage.py inspect`.",
+                )
+            ]
+
+        expected_class = "".join(
+            part.capitalize() for part in path.stem.split("_") if part
+        )
+        classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+        has_expected_class = len(classes) == 1 and classes[0].name == expected_class
+        if not has_expected_class:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="The filename and channel class disagree.",
+                    expected=f"Exactly one class named {expected_class}.",
+                    fix=f"Keep one class and name it {expected_class}.",
+                )
+            ]
+
+        channel = classes[0]
+        inherits_application_channel = any(
+            isinstance(base, ast.Name) and base.id == "ApplicationChannel"
+            for base in channel.bases
+        )
+        if not inherits_application_channel:
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Application channels must inherit from ApplicationChannel.",
+                    expected=f"class {expected_class}(ApplicationChannel): ...",
+                    fix="Import and inherit from app.channels.application_channel.",
+                )
+            ]
+
+        methods = {
+            node.name: node
+            for node in channel.body
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        }
+        required = ("subscribed", "received")
+        invalid = [
+            name
+            for name in required
+            if not isinstance(methods.get(name), ast.AsyncFunctionDef)
+        ]
+        unsubscribed = methods.get("unsubscribed")
+        if unsubscribed is not None and not isinstance(
+            unsubscribed, ast.AsyncFunctionDef
+        ):
+            invalid.append("unsubscribed")
+        if not invalid:
+            received = methods["received"]
+            parameters = [
+                *received.args.posonlyargs,
+                *received.args.args,
+                *received.args.kwonlyargs,
+            ]
+            if parameters and parameters[0].arg == "self":
+                parameters = parameters[1:]
+            has_one_typed_argument = (
+                len(parameters) == 1 and parameters[0].annotation is not None
+            )
+            if has_one_typed_argument:
+                return []
+            return [
+                ConventionViolation(
+                    path=path,
+                    problem="Channel received must accept one typed data argument.",
+                    expected="async def received(self, data: dict): ...",
+                    fix="Give received one typed data argument.",
+                )
+            ]
+
+        names = ", ".join(invalid)
+        return [
+            ConventionViolation(
+                path=path,
+                problem=f"Channel lifecycle methods must be asynchronous: {names}.",
+                expected="async subscribed, received, and optional unsubscribed methods.",
+                fix=f"Define these methods with async def: {names}.",
+            )
+        ]
 
     def _forbidden_architecture(self) -> list[ConventionViolation]:
         forbidden = {

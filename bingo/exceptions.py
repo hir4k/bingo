@@ -21,6 +21,18 @@ class BingoDatabaseError(BingoError):
     pass
 
 
+class BingoTaskError(BingoError):
+    pass
+
+
+class BingoChannelError(BingoError):
+    pass
+
+
+class BingoChannelRejected(BingoChannelError):
+    pass
+
+
 class BingoNotFoundError(BingoError):
     pass
 
