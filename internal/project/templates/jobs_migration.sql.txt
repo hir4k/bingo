@@ -1,0 +1,45 @@
+-- +goose Up
+-- Queue columns follow maragu.dev/goqite v0.4.0's SQLite protocol.
+CREATE TABLE goqite (
+ id TEXT PRIMARY KEY NOT NULL DEFAULT ('m_' || lower(hex(randomblob(16)))),
+ created TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+ updated TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+ queue TEXT NOT NULL,
+ body BLOB NOT NULL,
+ timeout TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+ received INTEGER NOT NULL DEFAULT 0,
+ priority INTEGER NOT NULL DEFAULT 0
+) STRICT;
+CREATE INDEX goqite_queue_priority_created_idx ON goqite(queue,priority DESC,created);
+CREATE TABLE bingo_jobs (
+ id TEXT PRIMARY KEY NOT NULL,
+ name TEXT NOT NULL,
+ payload TEXT NOT NULL,
+ dedupe_key TEXT,
+ status TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed')),
+ message_id TEXT UNIQUE,
+ attempts INTEGER NOT NULL,
+ max_attempts INTEGER NOT NULL,
+ timeout_ms INTEGER NOT NULL,
+ last_error TEXT,
+ created_at INTEGER NOT NULL,
+ updated_at INTEGER NOT NULL,
+ finished_at INTEGER,
+ schedule_name TEXT,
+ occurrence_at INTEGER,
+ UNIQUE(schedule_name,occurrence_at)
+) STRICT;
+CREATE UNIQUE INDEX bingo_jobs_active_key ON bingo_jobs(name,dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('pending','running');
+CREATE INDEX bingo_jobs_status ON bingo_jobs(status,created_at);
+CREATE TABLE bingo_schedules (
+ name TEXT PRIMARY KEY NOT NULL,
+ expression TEXT NOT NULL,
+ job TEXT NOT NULL,
+ payload TEXT NOT NULL,
+ next_run INTEGER NOT NULL
+) STRICT;
+
+-- +goose Down
+DROP TABLE bingo_schedules;
+DROP TABLE bingo_jobs;
+DROP TABLE goqite;

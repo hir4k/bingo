@@ -1,4 +1,4 @@
-// Command bingo creates a runnable application with bingo init.
+// Command bingo creates a runnable application with bingo new.
 package main
 
 import (
@@ -24,7 +24,7 @@ func run(arguments []string, output io.Writer, errorOutput io.Writer) int {
 	if arguments[0] == "help" || arguments[0] == "--help" || arguments[0] == "-h" {
 		if len(arguments) > 1 {
 			switch arguments[1] {
-			case "init", "generate", "db", "serve", "build", "version":
+			case "new", "generate", "db", "serve", "build", "version", "worker":
 				commandHelp(arguments[1], output)
 				return 0
 			default:
@@ -37,14 +37,14 @@ func run(arguments []string, output io.Writer, errorOutput io.Writer) int {
 		}
 		return 0
 	}
-	if arguments[0] != "init" {
+	if arguments[0] != "new" {
 		switch arguments[0] {
 		case "generate", "db", "serve", "build", "version":
 			return execute(arguments, output, errorOutput)
 		}
 		return delegate(arguments, output, errorOutput)
 	}
-	var flags *flag.FlagSet = flag.NewFlagSet("init", flag.ContinueOnError)
+	var flags *flag.FlagSet = flag.NewFlagSet("new", flag.ContinueOnError)
 	flags.SetOutput(errorOutput)
 	var module *string = flags.String("module", "", "Go module path (default: example.com/directory-name)")
 	var framework *string = flags.String("framework", localFramework(), "local Bingo module directory")
@@ -54,14 +54,11 @@ func run(arguments []string, output io.Writer, errorOutput io.Writer) int {
 		}
 		return 2
 	}
-	if flags.NArg() > 1 {
+	if flags.NArg() != 1 {
 		usage(errorOutput)
 		return 2
 	}
-	var destination string = "."
-	if flags.NArg() == 1 {
-		destination = flags.Arg(0)
-	}
+	var destination string = flags.Arg(0)
 	var absolute string
 	var err error
 	absolute, err = filepath.Abs(destination)
@@ -82,12 +79,12 @@ func run(arguments []string, output io.Writer, errorOutput io.Writer) int {
 		fmt.Fprintln(errorOutput, "Cannot locate Bingo checkout; pass --framework PATH.")
 		return 1
 	}
-	err = project.Init(destination, *module, *framework)
+	err = project.New(destination, *module, *framework)
 	if err != nil {
 		fmt.Fprintln(errorOutput, err)
 		return 1
 	}
-	fmt.Fprintf(output, "Created Bingo project in %s\nRun bingo db migrate, then bingo serve from that directory.\n", absolute)
+	fmt.Fprintf(output, "Created Bingo project in %s\nRegister routes in config/routes.go, then run bingo serve from that directory.\n", absolute)
 	return 0
 }
 
@@ -105,7 +102,7 @@ func localFramework() string {
 
 func usage(output io.Writer) {
 	fmt.Fprintln(output, "Bingo commands:")
-	for _, command := range []string{"init", "serve", "build", "generate", "db", "version"} {
+	for _, command := range []string{"new", "serve", "build", "generate", "db", "worker", "version"} {
 		commandHelp(command, output)
 	}
 	fmt.Fprintln(output, "bingo help [command]")

@@ -14,7 +14,7 @@ import (
 func newProject(t *testing.T) string {
 	t.Helper()
 	var directory string = filepath.Join(t.TempDir(), "app")
-	if err := Init(directory, "example.com/app", frameworkRoot(t)); err != nil {
+	if err := New(directory, "example.com/app", frameworkRoot(t)); err != nil {
 		t.Fatal(err)
 	}
 	return directory
@@ -152,5 +152,31 @@ func TestGeneratorLockProtectsVersionAllocation(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(root, ".bingo-generation.lock")); !os.IsNotExist(err) {
 		t.Fatal("lock was not released")
+	}
+}
+
+func TestNewIncludesJobQueueMigration(t *testing.T) {
+	root := newProject(t)
+	files, err := filepath.Glob(filepath.Join(root, "database/migrations/*.sql"))
+	if err != nil || len(files) != 1 || filepath.Base(files[0]) != "000001_create_bingo_jobs.sql" {
+		t.Fatalf("default migrations: %v %v", files, err)
+	}
+	var output bytes.Buffer
+	if err := Migrate(context.Background(), root, "test", "migrate", &output); err != nil {
+		t.Fatal(err)
+	}
+	db, err := bingo.OpenDatabase(bingo.DatabaseConfig{Driver: "sqlite", Database: filepath.Join(root, "database/test.sqlite3")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	defer pool.Close()
+	for _, table := range []string{"goqite", "bingo_jobs", "bingo_schedules"} {
+		if !db.Migrator().HasTable(table) {
+			t.Fatalf("missing queue table %s", table)
+		}
+	}
+	if _, err := GenerateMigration(root, "create_bingo_jobs", nil); err == nil {
+		t.Fatal("duplicate queue migration accepted")
 	}
 }

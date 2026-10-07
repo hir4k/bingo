@@ -7,7 +7,40 @@ import (
  "github.com/hir4k/bingo"
 )
 
-// Runtime environment lookup lets deployments change paths without rebuilding.
+// Database is registered in main.go through app.Database(config.Database). It runs
+// at execution time for the web server, worker, database CLI, and custom commands.
+// Development CLI defaults to development; bin/app defaults to production.
+//
+// Each environment has a local SQLite fallback filename. Its environmentVariable
+// supplies an optional deployment override, for example:
+//
+//   BINGO_PRODUCTION_DATABASE=/data/app.sqlite3 ./bin/app
+//   BINGO_PRODUCTION_DATABASE=/data/app.sqlite3 ./bin/app worker
+//
+// Use the same path for server and workers on the same host. Relative paths are
+// resolved against the app directory; BINGO_APP_DIR selects that directory for a
+// deployed binary. os.LookupEnv reads deployment values at runtime. An explicitly
+// empty override is rejected by Bingo; unknown environments also return errors.
+// Changing this Go logic requires rebuilding; changing env values does not.
+//
+// Create models and their reviewed migrations with:
+//
+//   bingo generate model User username:string active:bool
+//
+// This creates models/user.go and a numbered create_users SQL migration. Supported
+// fields: string/text, bool/boolean, integer/int, float, datetime. For later changes:
+//
+//   bingo generate migration add_bio_to_users bio:text
+//   bingo db status
+//   bingo db migrate [--env test]
+//   bingo db rollback [--env test]
+//   bingo db version [--env test]
+//
+// Other migration names create guarded SQL skeletons requiring manual SQL. The
+// skeleton includes a queue infrastructure migration; see config/jobs.go.
+// Review generated SQL, never edit applied migrations, and never use AutoMigrate.
+// Neither serve nor build migrates. After bingo build, deploy new SQL in the binary
+// and run ./bin/app db migrate explicitly before starting production processes.
 func Database(environment string) (bingo.DatabaseConfig,error) {
  var filename string
  var environmentVariable string

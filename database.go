@@ -53,6 +53,8 @@ func (a *App) DatabaseSettings(environment string) (DatabaseConfig, error) {
 
 // SQLite uses one pooled connection to avoid competing writers. Busy timeout and
 // foreign keys are configured on every connection through the driver's DSN.
+// Immediate transactions acquire the writer lock before reading, preventing
+// read-to-write upgrade races between server and worker processes.
 // GORM remains a native *gorm.DB; Bingo never calls AutoMigrate.
 func OpenDatabase(config DatabaseConfig) (*gorm.DB, error) {
 	if config.Driver != "sqlite" {
@@ -71,7 +73,7 @@ func OpenDatabase(config DatabaseConfig) (*gorm.DB, error) {
 		return nil, err
 	}
 	var location url.URL = url.URL{Scheme: "file", Path: filepath.ToSlash(config.Database)}
-	var dsn string = location.String() + "?_foreign_keys=on&_busy_timeout=5000"
+	var dsn string = location.String() + "?_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
 	var db *gorm.DB
 	db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {

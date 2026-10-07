@@ -25,6 +25,7 @@ type CommandContext struct {
 	Out         io.Writer
 	Err         io.Writer
 	Environment string
+	app         *App
 }
 type CommandHandler func(*CommandContext) error
 type command struct {
@@ -40,7 +41,7 @@ var commandName = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
 
 func reservedCommand(name string) bool {
 	switch name {
-	case "db", "help", "version", "init", "generate", "serve", "build":
+	case "db", "help", "version", "new", "generate", "serve", "build", "worker":
 		return true
 	default:
 		return false
@@ -90,6 +91,7 @@ func (a *App) environment() string {
 // Help/version do not open a database or require application files on disk.
 func (a *App) Execute(ctx context.Context, args []string, input io.Reader, output io.Writer, errorOutput io.Writer) error {
 	a.commands.frozen = true
+	a.jobs.frozen = true
 	if len(args) == 0 {
 		return fmt.Errorf("expected an application command")
 	}
@@ -104,7 +106,7 @@ func (a *App) Execute(ctx context.Context, args []string, input io.Reader, outpu
 		}
 		fmt.Fprintln(output, "Run without arguments to start the server.")
 		fmt.Fprintln(output, "db migrate|rollback|status|version [--env ENV]")
-		fmt.Fprintln(output, "version\nhelp [command]")
+		fmt.Fprintln(output, "worker [--env ENV] [--concurrency N]\nversion\nhelp [command]")
 		var names []string
 		for name := range a.commands.entries {
 			names = append(names, name)
@@ -120,6 +122,8 @@ func (a *App) Execute(ctx context.Context, args []string, input io.Reader, outpu
 		}
 		_, err := fmt.Fprintln(output, Version)
 		return err
+	case "worker":
+		return a.workerCommand(ctx, args[1:], errorOutput)
 	case "db":
 		return a.databaseCommand(ctx, args[1:], output, errorOutput)
 	}
@@ -148,12 +152,15 @@ func (a *App) Execute(ctx context.Context, args []string, input io.Reader, outpu
 		return err
 	}
 	defer pool.Close()
-	var commandContext *CommandContext = &CommandContext{Context: ctx, DB: db.WithContext(ctx), Args: append([]string(nil), args[1:]...), In: input, Out: output, Err: errorOutput, Environment: a.environment()}
+	var commandContext *CommandContext = &CommandContext{Context: ctx, DB: db.WithContext(ctx), Args: append([]string(nil), args[1:]...), In: input, Out: output, Err: errorOutput, Environment: a.environment(), app: a}
 	return registered.handler(commandContext)
 }
 
 func (a *App) commandHelp(name string, output io.Writer) error {
 	switch name {
+	case "worker":
+		fmt.Fprintln(output, "worker [--env development|test|production] [--concurrency N]")
+		return nil
 	case "db":
 		fmt.Fprintln(output, "db migrate|rollback|status|version [--env development|test|production]")
 		return nil

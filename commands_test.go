@@ -14,7 +14,7 @@ import (
 
 func TestCommandRegistrationRules(t *testing.T) {
 	handler := func(*CommandContext) error { return nil }
-	for _, name := range []string{"db", "build", "BadName", "two words", "todo-count", "_count", "count_", "todo__count", ""} {
+	for _, name := range []string{"db", "build", "new", "worker", "BadName", "two words", "todo-count", "_count", "count_", "todo__count", ""} {
 		t.Run(name, func(t *testing.T) {
 			defer func() {
 				if recover() == nil {

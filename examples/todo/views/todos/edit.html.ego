@@ -1,2 +1,0 @@
-<!doctype html>
-<html><head><meta charset="utf-8"><title>Todo input</title></head><body><h1>Todo input</h1><p>{{.Name}}</p><p>Submit application/json containing name and completed to POST {{url "todos.index"}} or PATCH {{url "todos.show" "id" .ID}}.</p></body></html>

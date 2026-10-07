@@ -13,16 +13,16 @@ import (
 	"strings"
 )
 
-// Embedding makes init work without locating template files at runtime.
+// Embedding makes new work without locating template files at runtime.
 //
-//go:embed templates/*.txt templates/views/*.txt
+//go:embed templates/*.txt
 var templates embed.FS
 
 var modulePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~/-]*$`)
 
-// Init creates only an empty or new directory. modulePath names the app's Go
+// New creates only an empty or new directory. modulePath names the app's Go
 // module; frameworkDir identifies the local Bingo checkout. No network is used.
-func Init(destination string, modulePath string, frameworkDir string) (resultError error) {
+func New(destination string, modulePath string, frameworkDir string) (resultError error) {
 	var validModule bool = modulePattern.MatchString(modulePath) && !strings.HasSuffix(modulePath, "/") && !strings.Contains(modulePath, "//")
 	if !validModule {
 		return fmt.Errorf("invalid module path %q", modulePath)
@@ -88,28 +88,26 @@ func Init(destination string, modulePath string, frameworkDir string) (resultErr
 		}
 	}
 	var name string = filepath.Base(target)
-	var replacements *strings.Replacer = strings.NewReplacer("__PROJECT_NAME__", name, "__BINARY_NAME__", filepath.Base(modulePath), "__MODULE__", modulePath)
+	var replacements *strings.Replacer = strings.NewReplacer("__PROJECT_NAME__", name, "__MODULE__", modulePath)
 	var files map[string][]byte = make(map[string][]byte)
 	for filename, source := range map[string]string{
-		"main.go":                                     "main.go.txt",
-		"controllers/todos_controller.go":             "todo_controller.go.txt",
-		"models/todo.go":                              "todo.go.txt",
-		"config/commands.go":                          "commands.go.txt",
-		"commands/commands.go":                        "custom_commands.go.txt",
-		"config/routes.go":                            "routes.go.txt",
-		"config/database.go":                          "database.go.txt",
-		"database/migrations/000001_create_todos.sql": "migration.sql.txt",
-		"README.md":                                   "README.md.txt",
-		"AGENTS.md":                                   "AGENTS.md.txt",
-		".gitignore":                                  "gitignore.txt",
+		"database/migrations/000001_create_bingo_jobs.sql": "jobs_migration.sql.txt",
+		"main.go":            "main.go.txt",
+		"config/jobs.go":     "jobs.go.txt",
+		"config/commands.go": "commands.go.txt",
+		"config/routes.go":   "routes.go.txt",
+		"config/database.go": "database.go.txt",
+		"README.md":          "README.md.txt",
+		"AGENTS.md":          "AGENTS.md.txt",
+		".gitignore":         "gitignore.txt",
 	} {
 		var contents []byte
 		contents, err = templates.ReadFile("templates/" + source)
 		if err != nil {
 			return err
 		}
-		// User-provided directory names are substituted only in documentation and
-		// ignore rules. Go sources and their template actions remain literal.
+		// Module paths are validated before substitution so generated Go imports
+		// and the commented registration examples refer to this application.
 		contents = []byte(replacements.Replace(string(contents)))
 		if strings.HasSuffix(filename, ".go") {
 			contents, err = format.Source(contents)
@@ -119,18 +117,8 @@ func Init(destination string, modulePath string, frameworkDir string) (resultErr
 		}
 		files[filename] = contents
 	}
-	var views []os.DirEntry
-	views, err = templates.ReadDir("templates/views")
-	if err != nil {
-		return err
-	}
-	for _, view := range views {
-		var contents []byte
-		contents, err = templates.ReadFile("templates/views/" + view.Name())
-		if err != nil {
-			return err
-		}
-		files["views/todos/"+strings.TrimSuffix(view.Name(), ".txt")] = contents
+	for _, directory := range []string{"controllers", "models", "commands", "jobs", "views"} {
+		files[directory+"/.keep"] = []byte{}
 	}
 	var frameworkPath string = strconv.Quote(filepath.ToSlash(framework))
 	files["go.mod"] = []byte("module " + modulePath + "\n\ngo " + version + "\n\nrequire github.com/hir4k/bingo v0.0.0\n\nreplace github.com/hir4k/bingo => " + frameworkPath + "\n")
@@ -179,7 +167,7 @@ func Init(destination string, modulePath string, frameworkDir string) (resultErr
 		}
 		createdDirectories = append(createdDirectories, target)
 	}
-	for _, directory := range []string{"views", "views/todos", "controllers", "models", "commands", "config", "database", "database/migrations"} {
+	for _, directory := range []string{"views", "controllers", "models", "commands", "jobs", "config", "database", "database/migrations"} {
 		var path string = filepath.Join(target, directory)
 		err = os.Mkdir(path, 0755)
 		if err != nil {

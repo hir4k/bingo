@@ -5,18 +5,23 @@ and Goose SQL migrations.
 
 ```sh
 go install ./cmd/bingo
-bingo init myapp
+bingo new myapp
 cd myapp
-bingo db migrate
 bingo serve
 ```
 
-init creates only a new or empty directory. Until Bingo is published, generated
+new creates an empty application in a new or empty directory. Use bingo new .
+to create it in the current empty folder. An explicit name or . is required.
+There are no default handlers, views, models, jobs, or custom commands;
+only the framework queue infrastructure migration is included;
+empty directories contain .keep files. Config files include commented setup
+examples and generator commands. Until Bingo is published, generated
 modules reference the local checkout. --framework PATH selects that checkout.
 If another executable named bingo precedes Go's binary on PATH, use
 "$(go env GOPATH)/bin/bingo" or put Go's bin directory first.
 
-Open [the todo collection](http://localhost:8080/todos). HTML and JSON are available
+For the separate demo, run bingo db migrate --app examples/todo, then
+bingo serve --app examples/todo. Open [the todo collection](http://localhost:8080/todos). HTML and JSON are available
 at /todos, /todos.json, /todos/1, and /todos/1.json. POST /todos creates, PATCH/PUT
 /todos/1 updates, and DELETE /todos/1 removes. Writes require application/json.
 
@@ -83,7 +88,6 @@ environment variables. Startup never migrates. Use --env for database commands.
 ```sh
 bingo build
 ./bin/app db migrate
-./bin/app todo_count
 ./bin/app help
 ./bin/app
 ```
@@ -131,3 +135,74 @@ bingo serve --app examples/todo
 Integration tests exercise real production deployments and development rebuilds
 through localhost. No editor plugin is implemented yet; .ego lets a future plugin
 target Bingo templates while leaving ordinary JSON/HTML files untouched.
+
+## Background jobs
+
+`main.go` calls `app.Jobs(config.RegisterJobs)`. Register snake_case handlers and
+five-field UTC recurring schedules explicitly in `config/jobs.go`:
+
+```go
+func RegisterJobs(registry *bingo.Jobs) {
+    registry.Register("send_reminder", jobs.SendReminder)
+    registry.Schedule("daily_reminder", "0 9 * * *", "send_reminder",
+        jobs.ReminderInput{UserID: 42})
+}
+```
+
+Handlers live in `jobs/` with signature `func(*bingo.JobContext) error`.
+`c.Decode(&input)` decodes the JSON payload into your struct and rejects unknown
+fields. `c.DB` is native GORM bound to `c.Context`; `c.ID`, `c.Attempt`, and `c.Key`
+identify the execution. Store identifiers in payloads and fetch records inside
+handlers. Never retain a request or its DB session for later work.
+
+Enqueue from requests, commands, and jobs using the same API:
+
+```go
+id, err := c.Enqueue("send_reminder", jobs.ReminderInput{UserID: 42})
+id, err = c.Enqueue("send_reminder", jobs.ReminderInput{UserID: 42}, bingo.JobOptions{
+    RunAt: time.Now().Add(10 * time.Minute),
+    Key: "reminder:user:42",
+})
+```
+
+Omit `RunAt` for immediate work. Optional `Key` deduplicates by job name while
+pending/running: concurrent enqueues return the existing ID. Completed and failed
+jobs release keys. Delivery is at least once; handlers must be safe to retry.
+Enqueue through a transaction-bound `c.DB` commits or rolls back with native GORM
+application writes. Payloads are limited to 1 MiB.
+
+Goqite provides SQLite delivery and leases. Bingo stores JSON payloads, status,
+attempts, and recurring cursors in the same database. Apply the explicit Goose
+job migration first. For an existing application, add the new migration with the
+next unused version; never overwrite an applied migration.
+
+```sh
+bingo db migrate
+bingo worker                       # development; default concurrency 1
+bingo worker --concurrency 2
+bingo build
+./bin/app db migrate
+./bin/app worker                   # production; separate from web process
+```
+
+The separate todo example registers `todo_count` and `daily_todo_count` at 09:00 UTC. Workers
+support `--env development|test|production`, poll messages every 200 ms, and
+poll recurring schedules every second. Web startup does not start a worker or
+migrate. Supervise web and worker processes separately, using the same SQLite
+file on the same host and the same release/configuration.
+
+`JobOptions.MaxAttempts` defaults to 3 (allowed 1–100); `Timeout` defaults to five
+minutes. Errors, panics, and timeouts retry with exponential backoff from one
+second, capped at 64 seconds. Final failures retain their errors. Handlers must
+honor `c.Context`: Go cannot forcibly stop a handler ignoring cancellation.
+Shutdown cancels handlers and waits for them to return. Thirty-second leases
+renew every ten seconds, allowing abandoned jobs to recover; receipt checks
+prevent stale acknowledgements.
+
+Recurring schedules record one occurrence per schedule/timestamp. Missed recurring
+occurrences during downtime are skipped; already-enqueued delayed jobs survive
+restart. Occurrences can overlap when concurrency permits. Keep schedule names
+stable. `bingo_jobs` retains completed/failed records, `attempts`, `last_error`,
+and timestamps for native SQL/GORM inspection. Automatic record pruning and a
+failed-job replay command are not included in this first version. Job schema
+is created only through reviewed Goose migrations, never at startup.

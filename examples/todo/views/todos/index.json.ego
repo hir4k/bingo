@@ -1,5 +1,0 @@
-{{/* text/template leaves text unescaped. json serializes each pure Go model.
-     range binds index and todo; a nonzero index inserts a comma before an item.
-     This yields valid brackets even for an empty slice, with no trailing comma.
-     Template comments do not become JSON comments in the output. */}}
-[{{range $index, $todo := .}}{{if $index}},{{end}}{"id":{{json $todo.ID}},"name":{{json $todo.Name}},"completed":{{json $todo.Completed}}}{{end}}]

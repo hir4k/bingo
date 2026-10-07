@@ -10,7 +10,8 @@ import (
  "github.com/hir4k/bingo"
 )
 
-//go:embed views database/migrations
+// all: includes .keep files so an empty application can still embed these folders.
+//go:embed all:views all:database/migrations
 var assets embed.FS
 
 func main() {
@@ -19,6 +20,7 @@ func main() {
  app.Database(config.Database)
  app.Routes(config.RegisterRoutes)
  app.Commands(config.RegisterCommands)
+ app.Jobs(config.RegisterJobs)
  var address string=os.Getenv("BINGO_ADDR")
  if address=="" { address=":8080" }
  if err:=app.Run(address);err!=nil {log.Fatal(err)}

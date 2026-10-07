@@ -64,7 +64,7 @@ func waitHTTP(t *testing.T, address string, predicate func(*http.Response, strin
 }
 
 func TestProductionBuildIsStandalone(t *testing.T) {
-	var root string = newProject(t)
+	var root string = newTodoProject(t)
 	var output lockedBuffer
 	var binary string = filepath.Join(root, "bin/app")
 	t.Setenv("BINGO_PRODUCTION_DATABASE", "database/build-time.sqlite3")
@@ -136,7 +136,7 @@ func TestProductionBuildIsStandalone(t *testing.T) {
 }
 
 func TestServeReloadAndFailedBuild(t *testing.T) {
-	var root string = newProject(t)
+	var root string = newTodoProject(t)
 	var output lockedBuffer
 	if err := Migrate(context.Background(), root, "development", "migrate", &output); err != nil {
 		t.Fatal(err)
@@ -211,4 +211,40 @@ func TestServeReloadAndFailedBuild(t *testing.T) {
 	waitHTTP(t, address, func(response *http.Response, body string) bool {
 		return response.StatusCode == 200 && response.Header.Get("X-Reload") == "yes"
 	})
+}
+
+// Server lifecycle tests add an explicit demo fixture; new applications stay empty.
+func newTodoProject(t *testing.T) string {
+	t.Helper()
+	root := newProject(t)
+	if err := os.Remove(filepath.Join(root, "database/migrations/000001_create_bingo_jobs.sql")); err != nil {
+		t.Fatal(err)
+	}
+	example := filepath.Join(frameworkRoot(t), "examples/todo")
+	for _, folder := range []string{"config", "controllers", "models", "commands", "jobs", "views", "database/migrations"} {
+		source := filepath.Join(example, folder)
+		err := filepath.WalkDir(source, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			relative, err := filepath.Rel(example, path)
+			if err != nil {
+				return err
+			}
+			target := filepath.Join(root, relative)
+			if entry.IsDir() {
+				return os.MkdirAll(target, 0755)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			contents = bytes.ReplaceAll(contents, []byte("example.com/todo"), []byte("example.com/app"))
+			return os.WriteFile(target, contents, 0644)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }

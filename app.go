@@ -18,7 +18,7 @@ import (
 // default to production; only bingo serve builds a development executable.
 var BuildMode string = "production"
 
-const Version string = "0.5.0"
+const Version string = "0.6.0"
 
 // App owns the connection, routing tree, assets, and server lifetime. DB is native
 // GORM; handler DB sessions inherit request cancellation without a CRUD wrapper.
@@ -30,6 +30,7 @@ type App struct {
 	Directory   string
 	database    func(string) (DatabaseConfig, error)
 	commands    *Commands
+	jobs        *Jobs
 }
 
 func New() *App {
@@ -38,6 +39,7 @@ func New() *App {
 		directory = "."
 	}
 	var app *App = &App{Directory: directory, commands: &Commands{entries: make(map[string]command)}, development: BuildMode == "development"}
+	app.jobs = &Jobs{handlers: make(map[string]JobHandler)}
 	app.root = &Router{state: &routingState{app: app, names: make(map[string]*route)}}
 	return app
 }
@@ -55,6 +57,7 @@ func (a *App) Routes(register func(*Router)) {
 }
 
 func (a *App) Handler() http.Handler {
+	a.jobs.frozen = true
 	var handler http.Handler = a.root.handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writer := &responseState{ResponseWriter: w}

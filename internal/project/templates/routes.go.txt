@@ -1,17 +1,53 @@
 package config
 
-import (
- "__MODULE__/controllers"
- "github.com/hir4k/bingo"
-)
+import "github.com/hir4k/bingo"
 
+// RegisterRoutes is called from main.go through app.Routes. The application starts
+// with no routes; requests return 404 until you register a handler here.
+//
+// Create handlers and starter views with:
+//
+//   bingo generate controller Users
+//
+// This creates controllers/users_controller.go with UsersIndex and UsersShow,
+// plus views/users/index.html.ego, index.json.ego, show.html.ego, and show.json.ego.
+// The generator does not register routes. Import "__MODULE__/controllers" above
+// after generating the package, then add these lines inside RegisterRoutes:
+//
+//   root.Get("/users", controllers.UsersIndex, "users.index")
+//   root.Get("/users/:id", controllers.UsersShow, "users.show")
+//
+// Handlers are functions with signature func(*bingo.Context) error. For the
+// database example below, generate User and import models as described in
+// config/database.go. For example:
+//
+//   func UsersIndex(c *bingo.Context) error {
+//       var users []models.User
+//       if err := c.DB.Order("id").Find(&users).Error; err != nil { return err }
+//       return c.Render("users/index", users)
+//   }
+//
+// c.DB is native GORM bound to the request context. Return errors for centralized
+// handling; bingo.HTTPError(404, "User not found") chooses a deliberate status.
+// c.Params["username"] reads a string; c.ParamInt("id") validates a positive ID.
+// View paths are explicit. Render chooses .html.ego or .json.ego from the request
+// suffix (.html/.json); HTML is the default. Templates use Go syntax and {{json .}}.
+//
+// Supported methods: Get, Post, Put, Patch, Delete. The third argument is an
+// optional globally unique route name; groups do not infer or prefix names.
+// c.URL("users.show", map[string]string{"id":"42"}) builds a named URL.
+// Templates use {{url "users.show" "id" .ID}}. Missing parameters are errors.
+//
+// Groups add URL prefixes and middleware. Declare Use before routes/groups:
+//
+//   root.Use(RequestLog)
+//   root.Group("/api", func(api *bingo.Router) {
+//       api.Use(Authenticate)
+//       api.Get("/users", controllers.UsersIndex, "api.users.index")
+//   })
+//
+// Middleware has signature func(http.Handler) http.Handler. Define RequestLog
+// and Authenticate before using the example. Duplicate names/method-path patterns
+// fail at registration. Routes freeze once app.Handler starts serving requests.
 func RegisterRoutes(root *bingo.Router) {
- root.Get("/todos",controllers.TodosIndex,"todos.index")
- root.Get("/todos/new",controllers.TodosNew,"todos.new")
- root.Get("/todos/:id",controllers.TodosShow,"todos.show")
- root.Get("/todos/:id/edit",controllers.TodosEdit,"todos.edit")
- root.Post("/todos",controllers.TodosCreate,"todos.create")
- root.Put("/todos/:id",controllers.TodosUpdate,"todos.replace")
- root.Patch("/todos/:id",controllers.TodosUpdate,"todos.update")
- root.Delete("/todos/:id",controllers.TodosDestroy,"todos.destroy")
 }

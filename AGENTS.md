@@ -9,7 +9,7 @@ composition, and comments explaining reasons. Read framework source before addin
 framework calls; do not invent APIs.
 
 - main.go is the only root Go source. It creates bingo.New(), supplies embedded
-  assets through app.Views, registers config.Database/RegisterRoutes/RegisterCommands, and
+  assets through app.Views, registers config.Database/RegisterRoutes/RegisterCommands/RegisterJobs, and
   calls app.Run. No arguments starts the server; arguments dispatch commands.
 - config/routes.go uses package config. Routers expose Get, Post, Put, Patch,
   Delete, Group, and Use. Routes accept path, handler, and an optional full name:
@@ -57,8 +57,36 @@ framework calls; do not invent APIs.
   Development bingo NAME delegates to the same handler as ./bin/app NAME.
 - Run go test ./... and bingo build after changes. Add meaningful behavior tests.
 
-Keep framework source, init templates, generators, CLI help, examples/todo, README,
+Keep framework source, new templates, generators, CLI help, examples/todo, README,
 and application AGENTS aligned. Never document APIs that are not implemented.
 There is one route/handler API; do not reintroduce Resource, BaseController,
 controller constructors, action-name strings, or template namespace inference.
 Run go test -race ./... and go vet ./.... Integration tests require localhost.
+
+- Background handlers live in jobs/ with signature func(*bingo.JobContext) error.
+  config/jobs.go explicitly registers snake_case handlers/schedules through
+  RegisterJobs; main.go calls app.Jobs(config.RegisterJobs). No init side effects.
+- Use c.Enqueue(name, payload, optional bingo.JobOptions) from request, command,
+  or job contexts. Payloads are JSON, maximum 1 MiB; c.Decode rejects unknown
+  fields. JobContext.DB is native GORM bound to its cancellation context.
+- JobOptions.RunAt delays availability; optional Key deduplicates by job name
+  while pending/running. Completed/failed jobs release keys. Delivery is at least
+  once: handlers must be safe to retry and honor c.Context. Never retain request DB.
+- Goqite uses the application SQLite database. Job schema is an explicit reviewed
+  Goose migration; no worker/startup AutoMigrate. Enqueue joins native GORM
+  transactions so payload and application writes commit or roll back together.
+- bingo worker is a separate development process; ./bin/app worker is production.
+  Both support --env and --concurrency (default 1). Web startup does not launch
+  workers. Register five-field UTC cron with Jobs.Schedule; missed recurring
+  occurrences are skipped, stored delayed jobs survive restart. Keep all workers
+  on the same release/configuration. Completed/failed records are retained.
+
+- bingo new NAME|. creates an empty application. Keep .keep files in empty
+  controllers, models, views, commands, and jobs folders.
+  main.go embeds all:views and all:database/migrations so hidden placeholders
+  compile without dummy templates or migrations. The todo app is a separate demo.
+- Config registration functions start empty and include local commented examples.
+  Do not register demo routes, commands, jobs, or schedules in new applications.
+  New apps include a queue storage SQL migration;
+  review and migrate before using background jobs. There is no command/job handler
+  generator; create these functions manually and register them explicitly.

@@ -146,12 +146,14 @@ func execute(arguments []string, output io.Writer, errorOutput io.Writer) int {
 
 func commandHelp(command string, output io.Writer) {
 	switch command {
-	case "init":
-		fmt.Fprintln(output, "bingo init [--module MODULE] [--framework PATH] [DIRECTORY]")
+	case "new":
+		fmt.Fprintln(output, "bingo new [--module MODULE] [--framework PATH] NAME|.")
 	case "generate":
 		fmt.Fprintln(output, "bingo generate controller|model|migration [--app PATH] NAME [field:type ...]")
 	case "db":
 		fmt.Fprintln(output, "bingo db migrate|rollback|status|version [--app PATH] [--env development|test|production]")
+	case "worker":
+		fmt.Fprintln(output, "bingo worker [--app PATH] [--env development|test|production] [--concurrency N]")
 	case "serve":
 		fmt.Fprintln(output, "bingo serve [--app PATH] [--addr :8080] (development only)")
 	case "build":

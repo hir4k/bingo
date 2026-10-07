@@ -1,10 +1,43 @@
 package config
 
-import (
- "__MODULE__/commands"
- "github.com/hir4k/bingo"
-)
+import "github.com/hir4k/bingo"
 
+// RegisterCommands is called from main.go through app.Commands. No custom commands
+// are registered by default. Built-in db, worker, help, and version remain available.
+//
+// There is no command generator. Create commands/rebuild_index.go manually:
+//
+//   package commands
+//   import (
+//       "fmt"
+//       "github.com/hir4k/bingo"
+//   )
+//   func RebuildIndex(c *bingo.CommandContext) error {
+//       if len(c.Args) != 0 { return fmt.Errorf("usage: rebuild_index") }
+//       _, err := fmt.Fprintln(c.Out, "Rebuilding index")
+//       return err
+//   }
+//
+// Then import "__MODULE__/commands" above and add inside RegisterCommands:
+//
+//   registry.Register("rebuild_index", "Rebuild the search index", commands.RebuildIndex)
+//
+// Run from the app folder using bingo rebuild_index in development, or
+// ./bin/app rebuild_index after bingo build. bingo help rebuild_index displays the
+// registered description. Arguments after the command are passed as c.Args.
+//
+// Names must be lowercase snake_case. Duplicate/reserved names fail at setup:
+// new, generate, serve, build, db, worker, help, and version belong to Bingo.
+// Registration is explicit; do not register through package init functions.
+//
+// Handlers have signature func(*bingo.CommandContext) error. c.Context carries
+// cancellation; c.DB is native GORM bound to that context. c.Environment is
+// development for the development CLI and production for the compiled binary.
+// c.In, c.Out, and c.Err carry input/output streams. Return errors; never os.Exit.
+// The database configuration in config/database.go also applies to commands.
+//
+// Commands can enqueue registered jobs with c.Enqueue("send_email", payload),
+// optionally passing bingo.JobOptions. See config/jobs.go for setup. Registration
+// alone does not run handlers, start a worker, or apply database migrations.
 func RegisterCommands(registry *bingo.Commands) {
- registry.Register("todo_count", "Count todos in the current environment", commands.TodoCount)
 }

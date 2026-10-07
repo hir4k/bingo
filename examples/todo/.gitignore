@@ -1,6 +1,0 @@
-# Generated executables and SQLite database state.
-/bin/
-/*.exe
-/go.work.sum
-/database/*.sqlite3
-/database/*.sqlite3-*

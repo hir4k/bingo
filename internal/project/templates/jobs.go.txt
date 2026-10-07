@@ -1,0 +1,72 @@
+package config
+
+import "github.com/hir4k/bingo"
+
+// RegisterJobs is called from main.go through app.Jobs. No handlers or schedules
+// are registered by default. Jobs run in a separate worker process, not the server.
+//
+// The skeleton includes database/migrations/000001_create_bingo_jobs.sql for
+// framework queue storage. Apply it explicitly before enqueueing or starting a worker:
+//
+//   bingo db migrate
+//
+// Review the generated SQL before migrating. This adds Goqite delivery storage,
+// bingo_jobs execution records, and bingo_schedules recurring cursors to SQLite.
+// Never edit applied migrations. No process applies migrations automatically.
+//
+// There is no job handler generator. Create jobs/send_email.go manually, for example:
+//
+//   package jobs
+//   import (
+//       "log"
+//       "github.com/hir4k/bingo"
+//   )
+//   type SendEmailInput struct { UserID uint `json:"user_id"` }
+//   func SendEmail(c *bingo.JobContext) error {
+//       var input SendEmailInput
+//       if err := c.Decode(&input); err != nil { return err }
+//       log.Printf("Send email for user %d (job %s)", input.UserID, c.ID)
+//       return nil
+//   }
+//
+// Then import "__MODULE__/jobs" above and add inside RegisterJobs:
+//
+//   registry.Register("send_email", jobs.SendEmail)
+//
+// Names use lowercase snake_case. Duplicates and unknown enqueue names fail.
+// Handlers have signature func(*bingo.JobContext) error. c.Decode rejects unknown
+// JSON fields. c.DB is native GORM bound to c.Context; honor cancellation, return
+// errors, and fetch records using identifiers in the payload. c.Attempt starts at 1.
+// Never retain a request or its DB connection for background work.
+//
+// From a controller, command, or another job (import the jobs package there):
+//
+//   id, err := c.Enqueue("send_email", jobs.SendEmailInput{UserID: 42})
+//   id, err := c.Enqueue("send_email", jobs.SendEmailInput{UserID: 42}, bingo.JobOptions{
+//       RunAt: time.Now().Add(10 * time.Minute),
+//       Key: "email:user:42",
+//   })
+//
+// Import time for delayed work. Enqueue returns a durable ID; it does not execute
+// the job. Key is optional and scoped to the job name: pending/running duplicates
+// return the existing ID. Completion/failure releases it. Enqueue through a native
+// GORM transaction-bound c.DB commits or rolls back with application writes.
+// Payloads are JSON with a 1 MiB limit. Defaults: MaxAttempts 3, Timeout 5 minutes.
+// JobOptions can override these. Errors/panics/timeouts retry with exponential
+// backoff. Delivery is at least once, so external effects must be safe to repeat.
+//
+// After registering a handler, optionally register a five-field UTC cron schedule:
+//
+//   registry.Schedule("daily_email", "0 9 * * *", "send_email", jobs.SendEmailInput{UserID: 42})
+//
+// Missed recurring occurrences during downtime are skipped; stored delayed jobs
+// survive restarts. Schedule occurrences can overlap. Keep schedule names stable.
+//
+// Development: bingo worker [--env test] [--concurrency 2] (default concurrency 1).
+// Production: bingo build, ./bin/app db migrate, then ./bin/app worker. Run web and
+// worker as separate supervised processes with the same SQLite file, release,
+// and configuration. SIGINT/SIGTERM cancel handlers and wait for them to return;
+// Go cannot forcibly stop handlers that ignore c.Context. Failed/completed records
+// remain in bingo_jobs for native SQL/GORM inspection; there is no automatic pruning.
+func RegisterJobs(registry *bingo.Jobs) {
+}
