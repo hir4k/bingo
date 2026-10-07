@@ -72,11 +72,27 @@ framework calls; do not invent APIs.
   on the same release/configuration. Completed/failed records are retained.
 
 - bingo new NAME|. creates an empty application. Keep .keep files in empty
-  controllers, models, views, commands, and jobs folders.
+  controllers, models, views, commands, jobs, and mcp folders.
   main.go embeds all:views and all:database/migrations so hidden placeholders
   compile without dummy templates or migrations. The todo app is a separate demo.
 - Config registration functions start empty and include local commented examples.
-  Do not register demo routes, commands, jobs, or schedules in new applications.
+  Do not register demo routes, commands, jobs, schedules, or MCP tools in new applications.
   New apps include a queue storage SQL migration;
   review and migrate before using background jobs. There is no command/job handler
   generator; create these functions manually and register them explicitly.
+
+- MCP is opt-in. mcp/ contains typed tool functions; config/mcp.go defines
+  RegisterMCP(*bingo.MCPServer). Mount with router.MCP("/mcp", RegisterMCP) in
+  config/routes.go, using ordinary root/group middleware. Never mount implicitly.
+- Register tools with bingo.AddTool(server, snake_case_name, description, handler).
+  Handlers are func(*bingo.MCPContext, Input) (Output, error); prefer concrete
+  structs with json/jsonschema tags. The official SDK infers/validates schemas.
+  Duplicates/invalid registrations fail setup; registration closes after callback.
+- MCPContext has Context, Request, native cancellation-bound DB, and Enqueue.
+  Middleware supplies authentication/context values; handlers authorize operations.
+  Long work uses jobs. Do not render views or write responses from tools.
+- MCP uses stateless Streamable HTTP JSON in the web process, with origin/body
+  protections. Exact endpoint paths reserve all methods and do not have format
+  suffix aliases. Errors/panics are MCP results; production hides internal details.
+  No stdio, prompts/resources, or OAuth server is provided. New apps keep mcp/.keep
+  and an empty, documented RegisterMCP function without a default endpoint/tool.

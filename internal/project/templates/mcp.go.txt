@@ -1,0 +1,61 @@
+package config
+
+import "github.com/hir4k/bingo"
+
+// RegisterMCP defines tools exposed through one MCP endpoint. New apps register
+// no tools and do not expose an endpoint until you mount it in config/routes.go:
+//
+//   root.Group("", func(api *bingo.Router) {
+//       api.Use(Authenticate)
+//       api.MCP("/mcp", RegisterMCP)
+//   })
+//
+// Define Authenticate middleware before using that example. For local development
+// you can mount root.MCP("/mcp", RegisterMCP) directly. The path inherits group
+// prefixes/middleware and reserves all HTTP methods on that exact path. The MCP
+// transport handles methods and protocol errors; .json/.html are not MCP aliases.
+// Authentication belongs in middleware; authorize each operation inside its tool.
+//
+// There is no MCP tool generator. Create mcp/list_users.go manually:
+//
+//   package mcp
+//   import "github.com/hir4k/bingo"
+//   type ListUsersInput struct { Limit int `json:"limit,omitempty"` }
+//   type ListUsersOutput struct { Names []string `json:"names"` }
+//   func ListUsers(c *bingo.MCPContext, input ListUsersInput) (ListUsersOutput, error) {
+//       return ListUsersOutput{Names: []string{}}, nil
+//   }
+//
+// Import tools "__MODULE__/mcp" above, then add inside RegisterMCP:
+//
+//   bingo.AddTool(server, "list_users", "List users", tools.ListUsers)
+//
+// Handler input/output types are checked by Go; the official MCP SDK infers JSON
+// schemas from them, validates arguments, and creates structured JSON responses.
+// Use concrete structs with json tags; jsonschema tags can describe fields, e.g.
+// `json:"limit,omitempty" jsonschema:"Maximum number of users to return"`.
+// Validate business limits in the handler. Struct inputs reject unknown fields.
+// Names use lowercase snake_case; missing descriptions, duplicates, nil handlers,
+// and invalid schemas fail at setup. Registration closes after RegisterMCP returns.
+//
+// Each call gets a fresh MCPContext. c.Context carries cancellation and middleware
+// values; c.Request contains incoming HTTP metadata. c.DB is native GORM bound
+// to c.Context. Use it to query models; never keep it for later background work.
+// c.Enqueue("send_email", payload, optional bingo.JobOptions) queues long work
+// and lets the tool return a job ID. See config/jobs.go for handlers and migrations.
+//
+// Return errors. bingo.HTTPError(status,message) exposes a deliberate tool error
+// message; its HTTP status is not used for the MCP response. Missing records map
+// to "Record not found". Other errors/panics are logged and become "Internal tool
+// error" in production; development exposes details. SDK input errors also return
+// protocol-native results; never render HTML or write an HTTP response from a tool.
+//
+// This is stateless Streamable HTTP with JSON responses, a 1 MiB body limit, and
+// origin protection. Tools run in the web process: bingo serve or ./bin/app.
+// No separate MCP process, database schema, stdio transport, prompts, or resources
+// are needed. Use https://your-domain/mcp as the MCP client URL after deployment.
+// Configure the client's credentials to match your authentication middleware.
+// Serve behind HTTPS in production; runtime database configuration is shared with
+// web handlers, commands, and workers. Production compiles tools/config into bin/app.
+func RegisterMCP(server *bingo.MCPServer) {
+}

@@ -9,9 +9,10 @@ The configuration files contain local examples, contracts, and setup commands:
 - `config/database.go`: SQLite, runtime environment variables, models, migrations.
 - `config/commands.go`: custom command functions and explicit registration.
 - `config/jobs.go`: payloads, enqueueing, retries, queue migration, recurring schedules.
+- `config/mcp.go`: typed MCP tools, endpoint mounting, middleware, and local examples.
 
 `main.go` is the only root Go source. Add application code to `controllers/`,
-`models/`, `commands/`, and `jobs/`, and templates to `views/`. Empty folders contain
+`models/`, `commands/`, `jobs/`, and `mcp/`, and templates to `views/`. Empty folders contain
 `.keep` files so Git preserves them. Keep the views placeholder until real templates exist: `all:views` includes
 `.keep` so the empty views folder compiles into production assets.
 
@@ -48,3 +49,9 @@ Generated modules currently reference a local Bingo checkout through `go.mod` an
 `go.work`. Update their paths when relocating the checkout. Run `go test ./...`
 after changing application code. Ordinary `.html`/`.json` files are unaffected by
 Bingo's `.html.ego`/`.json.ego` Go template naming convention.
+
+MCP is opt-in: create typed functions in `mcp/`, register them with `bingo.AddTool`
+in config/mcp.go, and mount `root.MCP("/mcp", RegisterMCP)` in config/routes.go.
+Use authenticated group middleware for a public endpoint; authorize operations
+inside tools. MCP runs with the web server and needs no separate process/schema.
+See config/mcp.go for full examples and contracts. No tools are registered by default.

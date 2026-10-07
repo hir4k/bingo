@@ -28,12 +28,12 @@ func TestNewCreatesEmptyRunnableProject(t *testing.T) {
 	if err := New(directory, "example.com/myapp", frameworkRoot(t)); err != nil {
 		t.Fatal(err)
 	}
-	for _, filename := range []string{"main.go", "config/routes.go", "config/commands.go", "config/jobs.go", "config/database.go", "go.mod", "go.work", "README.md", "AGENTS.md", ".gitignore", "database/migrations/000001_create_bingo_jobs.sql"} {
+	for _, filename := range []string{"main.go", "config/routes.go", "config/commands.go", "config/jobs.go", "config/mcp.go", "config/database.go", "go.mod", "go.work", "README.md", "AGENTS.md", ".gitignore", "database/migrations/000001_create_bingo_jobs.sql"} {
 		if _, err := os.Stat(filepath.Join(directory, filename)); err != nil {
 			t.Fatalf("missing %s: %v", filename, err)
 		}
 	}
-	for _, folder := range []string{"controllers", "models", "commands", "jobs", "views"} {
+	for _, folder := range []string{"controllers", "models", "commands", "jobs", "mcp", "views"} {
 		entries, err := os.ReadDir(filepath.Join(directory, folder))
 		if err != nil || len(entries) != 1 || entries[0].Name() != ".keep" {
 			t.Fatalf("expected empty %s with .keep: %v %v", folder, entries, err)
@@ -64,9 +64,12 @@ func TestEmptyApplication(t *testing.T) {
  for _, path:=range []string{"views/.keep","database/migrations/000001_create_bingo_jobs.sql"} {
   if _,err:=fs.Stat(assets,path);err!=nil {t.Fatal(err)}
  }
- response:=httptest.NewRecorder()
- app.Handler().ServeHTTP(response,httptest.NewRequest("GET","/todos",nil))
- if response.Code!=404 {t.Fatalf("unexpected default route: %d",response.Code)}
+ handler:=app.Handler()
+ for _,path:=range []string{"/todos","/mcp"} {
+  response:=httptest.NewRecorder()
+  handler.ServeHTTP(response,httptest.NewRequest("GET",path,nil))
+  if response.Code!=404 {t.Fatalf("unexpected default route %s: %d",path,response.Code)}
+ }
  var output bytes.Buffer
  if err:=app.Execute(context.Background(),[]string{"help"},nil,&output,&output);err!=nil {t.Fatal(err)}
  if strings.Contains(output.String(),"todo_count") {t.Fatal("default custom command registered")}

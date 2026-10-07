@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,7 +17,12 @@ func jobTestApp(t *testing.T) (*App, *gorm.DB) {
 	t.Helper()
 	app := New()
 	config := DatabaseConfig{Driver: "sqlite", Database: filepath.Join(t.TempDir(), "jobs.sqlite3")}
-	if err := runMigrations(context.Background(), config, os.DirFS("examples/todo/database/migrations"), "migrate", os.Stderr); err != nil {
+	schema, err := os.ReadFile("internal/project/templates/jobs_migration.sql.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrations := fstest.MapFS{"000001_create_bingo_jobs.sql": &fstest.MapFile{Data: schema}}
+	if err := runMigrations(context.Background(), config, migrations, "migrate", os.Stderr); err != nil {
 		t.Fatal(err)
 	}
 	db, err := OpenDatabase(config)

@@ -126,6 +126,22 @@ func TestProductionBuildIsStandalone(t *testing.T) {
 	waitHTTP(t, address, func(response *http.Response, body string) bool {
 		return response.StatusCode == 200 && strings.Contains(body, "Learn Go templates")
 	})
+	request, err := http.NewRequest("POST", "http://"+address+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"todo_count","arguments":{}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	request.Header.Set("MCP-Protocol-Version", "2025-11-25")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != 200 || !strings.Contains(string(body), `"count":2`) {
+		t.Fatalf("standalone MCP: %d %s", response.StatusCode, body)
+	}
 	if !strings.Contains(output.String(), "(production)") {
 		t.Fatal(output.String())
 	}
@@ -213,36 +229,75 @@ func TestServeReloadAndFailedBuild(t *testing.T) {
 	})
 }
 
-// Server lifecycle tests add an explicit demo fixture; new applications stay empty.
+// Lifecycle fixtures are self-contained; new applications remain empty.
 func newTodoProject(t *testing.T) string {
 	t.Helper()
 	root := newProject(t)
-	if err := os.Remove(filepath.Join(root, "database/migrations/000001_create_bingo_jobs.sql")); err != nil {
+	if err := GenerateModel(root, "Todo", []string{"name:string", "completed:bool"}); err != nil {
 		t.Fatal(err)
 	}
-	example := filepath.Join(frameworkRoot(t), "examples/todo")
-	for _, folder := range []string{"config", "controllers", "models", "commands", "jobs", "views", "database/migrations"} {
-		source := filepath.Join(example, folder)
-		err := filepath.WalkDir(source, func(path string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			relative, err := filepath.Rel(example, path)
-			if err != nil {
-				return err
-			}
-			target := filepath.Join(root, relative)
-			if entry.IsDir() {
-				return os.MkdirAll(target, 0755)
-			}
-			contents, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			contents = bytes.ReplaceAll(contents, []byte("example.com/todo"), []byte("example.com/app"))
-			return os.WriteFile(target, contents, 0644)
-		})
-		if err != nil {
+	files := map[string]string{
+		"database/migrations/000003_seed_todos.sql": "-- +goose Up\nINSERT INTO todos(name,completed) VALUES ('Learn Go templates',0),('Ship Bingo',0);\n-- +goose Down\nDELETE FROM todos;\n",
+		"config/routes.go": `package config
+import (
+ "example.com/app/controllers"
+ "github.com/hir4k/bingo"
+)
+func RegisterRoutes(root *bingo.Router) {root.Get("/todos",controllers.TodosIndex,"todos.index");root.MCP("/mcp",RegisterMCP)}
+`,
+		"controllers/todos_controller.go": `package controllers
+import (
+ "example.com/app/models"
+ "github.com/hir4k/bingo"
+)
+func TodosIndex(c *bingo.Context) error {
+ var todos []models.Todo
+ if err:=c.DB.Order("id").Find(&todos).Error;err!=nil {return err}
+ return c.Render("todos/index", todos)
+}
+`,
+		"config/commands.go": `package config
+import "github.com/hir4k/bingo"
+func RegisterCommands(registry *bingo.Commands) {registry.Register("todo_count","Count test todos",countTodos)}
+`,
+		"config/mcp.go": `package config
+import (
+ tools "example.com/app/mcp"
+ "github.com/hir4k/bingo"
+)
+func RegisterMCP(server *bingo.MCPServer) {bingo.AddTool(server,"todo_count","Count test todos",tools.TodoCount)}
+`,
+		"mcp/todo_count.go": `package mcp
+import "github.com/hir4k/bingo"
+type TodoCountInput struct{}
+type TodoCountOutput struct {Count int64 "json:\"count\""}
+func TodoCount(c *bingo.MCPContext,_ TodoCountInput)(TodoCountOutput,error) {
+ var count int64
+ err:=c.DB.Table("todos").Count(&count).Error
+ return TodoCountOutput{Count:count},err
+}
+`,
+		"config/count_todos.go": `package config
+import (
+ "fmt"
+ "github.com/hir4k/bingo"
+)
+func countTodos(c *bingo.CommandContext) error {
+ var count int64
+ if err:=c.DB.Table("todos").Count(&count).Error;err!=nil {return err}
+ _,err:=fmt.Fprintln(c.Out,count)
+ return err
+}
+`,
+		"views/todos/index.json.ego": "{{json .}}\n",
+		"views/todos/index.html.ego": "<!doctype html><html><body>{{range .}}<p>{{.Name}}</p>{{end}}</body></html>\n",
+	}
+	for name, contents := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}

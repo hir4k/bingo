@@ -93,6 +93,7 @@ func New(destination string, modulePath string, frameworkDir string) (resultErro
 	for filename, source := range map[string]string{
 		"database/migrations/000001_create_bingo_jobs.sql": "jobs_migration.sql.txt",
 		"main.go":            "main.go.txt",
+		"config/mcp.go":      "mcp.go.txt",
 		"config/jobs.go":     "jobs.go.txt",
 		"config/commands.go": "commands.go.txt",
 		"config/routes.go":   "routes.go.txt",
@@ -117,7 +118,7 @@ func New(destination string, modulePath string, frameworkDir string) (resultErro
 		}
 		files[filename] = contents
 	}
-	for _, directory := range []string{"controllers", "models", "commands", "jobs", "views"} {
+	for _, directory := range []string{"controllers", "models", "commands", "jobs", "mcp", "views"} {
 		files[directory+"/.keep"] = []byte{}
 	}
 	var frameworkPath string = strconv.Quote(filepath.ToSlash(framework))
@@ -167,7 +168,7 @@ func New(destination string, modulePath string, frameworkDir string) (resultErro
 		}
 		createdDirectories = append(createdDirectories, target)
 	}
-	for _, directory := range []string{"views", "controllers", "models", "commands", "jobs", "config", "database", "database/migrations"} {
+	for _, directory := range []string{"views", "controllers", "models", "commands", "jobs", "mcp", "config", "database", "database/migrations"} {
 		var path string = filepath.Join(target, directory)
 		err = os.Mkdir(path, 0755)
 		if err != nil {

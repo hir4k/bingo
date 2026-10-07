@@ -18,7 +18,7 @@ import (
 // default to production; only bingo serve builds a development executable.
 var BuildMode string = "production"
 
-const Version string = "0.6.0"
+const Version string = "0.7.0"
 
 // App owns the connection, routing tree, assets, and server lifetime. DB is native
 // GORM; handler DB sessions inherit request cancellation without a CRUD wrapper.

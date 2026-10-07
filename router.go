@@ -14,12 +14,13 @@ type Handler func(*Context) error
 type Middleware func(http.Handler) http.Handler
 
 type route struct {
-	method     string
-	path       string
-	shape      string
-	parts      []string
-	handler    Handler
-	middleware []Middleware
+	method      string
+	path        string
+	shape       string
+	parts       []string
+	handler     Handler
+	httpHandler http.Handler
+	middleware  []Middleware
 }
 
 type routingState struct {
@@ -119,7 +120,8 @@ func (r *Router) add(method, routePath string, handler Handler, names []string) 
 	}
 	shape := strings.Join(shapeParts, "/")
 	for _, existing := range r.state.routes {
-		if existing.method == method && existing.shape == shape {
+		sameMethod := existing.method == method || existing.method == "*" || method == "*"
+		if sameMethod && existing.shape == shape {
 			panic("bingo: duplicate route " + method + " " + fullPath)
 		}
 	}
@@ -184,23 +186,34 @@ func (r *Router) handler() http.Handler {
 	})
 	handlers := make(map[*route]http.Handler)
 	for _, registration := range routes {
-		var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-			cleanPath, format, _ := parsePath(request.URL.EscapedPath())
-			params, _ := matchRoute(registration, strings.Split(strings.TrimPrefix(cleanPath, "/"), "/"))
-			c := &Context{ResponseWriter: &responseState{ResponseWriter: w}, Request: request, Format: format, Params: params, ViewsDir: filepath.Join(r.state.app.Directory, "views"), Views: r.state.app.views, Development: r.state.app.development, app: r.state.app}
-			if r.state.app.DB != nil {
-				c.DB = r.state.app.DB.WithContext(request.Context())
-			}
-			if err := registration.handler(c); err != nil {
-				c.writeError(err)
-			}
-		})
+		var handler http.Handler = registration.httpHandler
+		if handler == nil {
+			handler = http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				cleanPath, format, _ := parsePath(request.URL.EscapedPath())
+				params, _ := matchRoute(registration, strings.Split(strings.TrimPrefix(cleanPath, "/"), "/"))
+				c := &Context{ResponseWriter: &responseState{ResponseWriter: w}, Request: request, Format: format, Params: params, ViewsDir: filepath.Join(r.state.app.Directory, "views"), Views: r.state.app.views, Development: r.state.app.development, app: r.state.app}
+				if r.state.app.DB != nil {
+					c.DB = r.state.app.DB.WithContext(request.Context())
+				}
+				if err := registration.handler(c); err != nil {
+					c.writeError(err)
+				}
+			})
+		}
 		for i := len(registration.middleware) - 1; i >= len(r.middleware); i-- {
 			handler = registration.middleware[i](handler)
 		}
 		handlers[registration] = handler
 	}
 	var dispatcher http.Handler = http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		// Protocol mounts dispatch before HTML/JSON format matching and pass
+		// all methods to their transport handler, including GET and OPTIONS.
+		for _, registration := range routes {
+			if registration.httpHandler != nil && request.URL.EscapedPath() == registration.path {
+				handlers[registration].ServeHTTP(w, request)
+				return
+			}
+		}
 		cleanPath, _, valid := parsePath(request.URL.EscapedPath())
 		if !valid {
 			http.NotFound(w, request)
@@ -210,6 +223,9 @@ func (r *Router) handler() http.Handler {
 		var selected *route
 		var allowed []string
 		for _, registration := range routes {
+			if registration.httpHandler != nil {
+				continue
+			}
 			if _, matches := matchRoute(registration, parts); !matches {
 				continue
 			}

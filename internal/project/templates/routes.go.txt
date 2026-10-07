@@ -46,6 +46,10 @@ import "github.com/hir4k/bingo"
 //       api.Get("/users", controllers.UsersIndex, "api.users.index")
 //   })
 //
+// To expose MCP tools, mount root.MCP("/mcp", RegisterMCP), or use a group
+// with authentication middleware. See config/mcp.go for complete tool examples.
+// MCP is opt-in; new applications do not expose an endpoint by default.
+//
 // Middleware has signature func(http.Handler) http.Handler. Define RequestLog
 // and Authenticate before using the example. Duplicate names/method-path patterns
 // fail at registration. Routes freeze once app.Handler starts serving requests.

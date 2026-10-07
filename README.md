@@ -20,10 +20,8 @@ modules reference the local checkout. --framework PATH selects that checkout.
 If another executable named bingo precedes Go's binary on PATH, use
 "$(go env GOPATH)/bin/bingo" or put Go's bin directory first.
 
-For the separate demo, run bingo db migrate --app examples/todo, then
-bingo serve --app examples/todo. Open [the todo collection](http://localhost:8080/todos). HTML and JSON are available
-at /todos, /todos.json, /todos/1, and /todos/1.json. POST /todos creates, PATCH/PUT
-/todos/1 updates, and DELETE /todos/1 removes. Writes require application/json.
+The examples below show application code you can add; new applications do not
+include todo routes or handlers by default.
 
 main.go is the only root Go source. config/routes.go registers handlers:
 
@@ -128,8 +126,6 @@ Framework validation:
 ```sh
 go test -race ./...
 go vet ./...
-bingo db migrate --app examples/todo
-bingo serve --app examples/todo
 ```
 
 Integration tests exercise real production deployments and development rebuilds
@@ -185,7 +181,7 @@ bingo build
 ./bin/app worker                   # production; separate from web process
 ```
 
-The separate todo example registers `todo_count` and `daily_todo_count` at 09:00 UTC. Workers
+Register handlers and schedules explicitly in config/jobs.go. Workers
 support `--env development|test|production`, poll messages every 200 ms, and
 poll recurring schedules every second. Web startup does not start a worker or
 migrate. Supervise web and worker processes separately, using the same SQLite
@@ -206,3 +202,75 @@ stable. `bingo_jobs` retains completed/failed records, `attempts`, `last_error`,
 and timestamps for native SQL/GORM inspection. Automatic record pruning and a
 failed-job replay command are not included in this first version. Job schema
 is created only through reviewed Goose migrations, never at startup.
+
+## MCP tools
+
+New applications include `mcp/.keep` and a documented `config/mcp.go`. There are
+no default tools or exposed MCP endpoints. Mount the endpoint in config/routes.go:
+
+```go
+root.Group("", func(api *bingo.Router) {
+    api.Use(Authenticate)
+    api.MCP("/mcp", RegisterMCP)
+})
+```
+
+Define your authentication middleware before using this example. A local
+application can mount `root.MCP("/mcp", RegisterMCP)` directly. MCP inherits group
+prefixes and middleware; it reserves all methods on its exact path. Normal
+routes cannot register the same path, and `.html`/`.json` are not endpoint aliases.
+
+Create a function in `mcp/`, then import it in `config/mcp.go` with an alias:
+
+```go
+import (
+    tools "example.com/myapp/mcp"
+    "github.com/hir4k/bingo"
+)
+
+func RegisterMCP(server *bingo.MCPServer) {
+    bingo.AddTool(server, "greet", "Greet a person", tools.Greet)
+}
+```
+
+```go
+package mcp
+
+import "github.com/hir4k/bingo"
+
+type GreetInput struct { Name string `json:"name"` }
+type GreetOutput struct { Greeting string `json:"greeting"` }
+
+func Greet(c *bingo.MCPContext, input GreetInput) (GreetOutput, error) {
+    return GreetOutput{Greeting: "Hello " + input.Name}, nil
+}
+```
+
+Go checks handler types at compile time; the official Go MCP SDK derives input
+and output JSON schemas and validates arguments before execution. Concrete structs
+provide predictable contracts, including rejection of unknown input fields.
+Use `json` tags for names/optional fields and `jsonschema` tags for descriptions.
+Validate business constraints inside handlers. Tool names are explicit lowercase
+snake_case; duplicates, invalid schemas, missing descriptions, and nil handlers
+fail at setup. Registration closes after RegisterMCP returns. No MCP generator
+is provided; the configuration file includes a complete manual example.
+
+Each call gets a fresh MCPContext. `c.Context` retains middleware values and
+cancellation, `c.Request` supplies HTTP metadata, and `c.DB` is native GORM bound
+to the call context. Use `c.Enqueue` with the existing job API for long operations
+and return a job ID. Enqueue participates in a transaction-bound native DB session.
+MCP has no separate database schema, process, or migrations; jobs need the normal
+explicit queue migration. Tools share application services with web/CLI handlers.
+
+Returned errors become MCP tool error results. `bingo.HTTPError` exposes its
+message; GORM missing records map to "Record not found". Other failures/panics
+are logged and use "Internal tool error" in production, with details available
+in development. HTTP status codes are not substituted for MCP tool results.
+
+The transport is stateless Streamable HTTP with JSON responses, a 1 MiB body limit,
+origin protection, and the SDK's localhost protections. Use an MCP client at
+`https://example.com/mcp`; a browser GET receives 405. Tools run in the same web
+process under `bingo serve` or `./bin/app`. Authenticate the endpoint using normal
+router middleware, authorize each tool operation, and deploy behind HTTPS.
+Stdio, MCP prompts/resources, and an OAuth authorization server are not included.
+Protocol mechanics are delegated to the official SDK rather than recreated.
