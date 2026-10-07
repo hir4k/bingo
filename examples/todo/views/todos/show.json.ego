@@ -1,0 +1,3 @@
+{{/* Dot is a single model; the json function preserves JSON quoting and types.
+     Unlike a literal comment, this template comment disappears from output. */}}
+{"id":{{json .ID}},"name":{{json .Name}},"completed":{{json .Completed}}}

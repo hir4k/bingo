@@ -1,0 +1,79 @@
+package controllers
+
+import (
+ "net/http"
+ "strconv"
+ "strings"
+
+ "__MODULE__/models"
+ "github.com/hir4k/bingo"
+)
+
+type TodoInput struct {
+ Name string `json:"name"`
+ Completed bool `json:"completed"`
+}
+
+func TodosIndex(c *bingo.Context) error {
+ var todos []models.Todo
+ if err:=c.DB.Order("id").Find(&todos).Error;err!=nil {return err}
+ return c.Render("todos/index",todos)
+}
+
+func findTodo(c *bingo.Context) (models.Todo,error) {
+ var todo models.Todo
+ id,err:=c.ParamInt("id")
+ if err!=nil {return todo,err}
+ err=c.DB.First(&todo,id).Error
+ return todo,err
+}
+
+func TodosShow(c *bingo.Context) error {
+ todo,err:=findTodo(c)
+ if err!=nil {return err}
+ return c.Render("todos/show",todo)
+}
+
+func TodosNew(c *bingo.Context) error {return c.Render("todos/new",models.Todo{})}
+
+func TodosEdit(c *bingo.Context) error {
+ todo,err:=findTodo(c)
+ if err!=nil {return err}
+ return c.Render("todos/edit",todo)
+}
+
+func TodosCreate(c *bingo.Context) error {
+ var input TodoInput
+ if err:=c.BindJSON(&input);err!=nil {return err}
+ if strings.TrimSpace(input.Name)=="" {return bingo.HTTPError(422,"Name is required")}
+ todo:=models.Todo{Name:input.Name,Completed:input.Completed}
+ if err:=c.DB.Create(&todo).Error;err!=nil {return err}
+ return redirectTodo(c,todo.ID)
+}
+
+func TodosUpdate(c *bingo.Context) error {
+ todo,err:=findTodo(c)
+ if err!=nil {return err}
+ var input TodoInput
+ if err:=c.BindJSON(&input);err!=nil {return err}
+ if strings.TrimSpace(input.Name)=="" {return bingo.HTTPError(422,"Name is required")}
+ // Select includes false values without exposing IDs and timestamps to writes.
+ if err:=c.DB.Model(&todo).Select("Name","Completed").Updates(models.Todo{Name:input.Name,Completed:input.Completed}).Error;err!=nil {return err}
+ return redirectTodo(c,todo.ID)
+}
+
+func TodosDestroy(c *bingo.Context) error {
+ todo,err:=findTodo(c)
+ if err!=nil {return err}
+ if err:=c.DB.Delete(&todo).Error;err!=nil {return err}
+ c.ResponseWriter.WriteHeader(http.StatusNoContent)
+ return nil
+}
+
+func redirectTodo(c *bingo.Context,id uint) error {
+ destination,err:=c.URL("todos.show",map[string]string{"id":strconv.FormatUint(uint64(id),10)})
+ if err!=nil {return err}
+ if c.Format=="json" {destination+=".json"}
+ http.Redirect(c.ResponseWriter,c.Request,destination,http.StatusSeeOther)
+ return nil
+}

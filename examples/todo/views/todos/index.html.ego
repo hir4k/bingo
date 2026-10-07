@@ -1,0 +1,18 @@
+{{/* Templates receive data through dot. range over a slice changes dot to
+     each Todo; exported fields such as .Name belong to that current item.
+     html/template escapes names automatically. These comments are removed
+     during rendering, unlike literal HTML comments. */}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Todos</title></head>
+<body>
+<h1>Todos</h1>
+<ul>
+{{range .}}
+<li><a href="{{url "todos.show" "id" .ID}}">{{.Name}}</a> — {{if .Completed}}complete{{else}}pending{{end}}</li>
+{{else}}
+<li>No todos yet.</li>
+{{end}}
+</ul>
+</body>
+</html>
